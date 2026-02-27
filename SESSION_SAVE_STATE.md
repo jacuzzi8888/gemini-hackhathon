@@ -21,7 +21,9 @@ Aura Sight is an AI-powered "Visual Proxy" for the visually impaired, leveraging
 - [x] Finalize Implementation Plan (PWA Pivot)
 - [x] Initialize Project Foundation (Scaffolding Complete)
 - [x] Initial Push to GitHub (jacuzzi8888/gemini-hackhathon)
-- [ ] **Next Step: Setup Google Cloud Backend & Gemini Live API Connection**
+- [x] Fix Vercel Build (Tailwind CSS v4 & Theme Migration)
+- [/] Setup Secure Backend Proxy (Configuring CI/CD)
+- [ ] **Next Step: Implement Pathfinder & Guardian Features**
 
 ## 4. Critical Rules
 - Priority: Answer questions first; no autonomous coding/fixes without explicit approval.
