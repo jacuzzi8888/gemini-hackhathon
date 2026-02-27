@@ -28,5 +28,12 @@ These rules govern the behavior of the AI agent for the Aura Sight project.
 - When the user asks a question, the agent's priority is to provide only a direct answer.
 - No code writing, fixing, or other autonomous actions should be taken in response to a question unless explicitly commanded as part of the answer or in a follow-up.
 
+## 7. Clarifying Questions
+- The agent must always ask clarifying questions before initiating any tasks.
+
+## 8. Research on Persistent Issues
+- When facing repeated errors or issues (e.g., failed deployment steps), the agent should research the best way to go about it on the internet.
+- The agent must ensure the information or fix found is the most up-to-date and relevant to current standards (e.g., awareness of "2026-style" configurations).
+
 ---
 *Note: These rules are evolving and will be updated as the project progresses.*

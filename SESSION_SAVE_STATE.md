@@ -11,7 +11,7 @@ Aura Sight is an AI-powered "Visual Proxy" for the visually impaired, leveraging
 - **Deployment Platform:** PWA (Progressive Web App) via Vercel for speed and reach.
 - **Frontend Framework:** React + Vite + Tailwind CSS.
 - **AI Engine:** Gemini 3.1 Flash (Multimodal Live API).
-- **Backend:** Google Cloud Run (pinned sessions for WebSockets).
+- **Backend:** Google Cloud Run (pinned sessions for WebSockets in project ocellus-488718).
 - **Sensory Language:** Hybrid approach using Spatial Audio and the Web Vibration API.
 
 ## 3. Current Task Progress
@@ -22,13 +22,16 @@ Aura Sight is an AI-powered "Visual Proxy" for the visually impaired, leveraging
 - [x] Initialize Project Foundation (Scaffolding Complete)
 - [x] Initial Push to GitHub (jacuzzi8888/gemini-hackhathon)
 - [x] Fix Vercel Build (Tailwind CSS v4 & Theme Migration)
-- [/] Setup Secure Backend Proxy (Configuring CI/CD)
+- [x] Setup Secure Backend Proxy (Gemini Live API Bridge)
+- [x] Deploy Backend to Google Cloud Run (WIF CI/CD Configured - `aura-pool`/`aura-provider`)
+- [/] GitHub Actions Deployment (Waiting for User Secrets & Permission Sweep)
+- [ ] **Next Step: Integrate Frontend (Connect PWA to Cloud Run URL)**
 - [ ] **Next Step: Implement Pathfinder & Guardian Features**
 
-## 4. Critical Rules
-- Priority: Answer questions first; no autonomous coding/fixes without explicit approval.
-- Tech must be 2026-compliant.
-- No critical decisions without user approval.
+## 4. Critical Rules (Updated in Rule.md)
+- **Clarifying Questions:** Always ask questions before starting new tasks.
+- **Up-to-Date Research:** For persistent errors, research 2026-current fixes on the internet.
+- **Approval-First:** No coding without explicit user consent.
 
 ## 5. Required Context References
 To resume development, the agent MUST review these documents:
