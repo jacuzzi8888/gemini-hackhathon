@@ -1,6 +1,14 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@theme {
+  --color-aura-primary: #FF4D00;
+  --color-aura-secondary: #00E0FF;
+  --color-aura-accent: #7000FF;
+  --color-aura-dark: #0A0A0A;
+  --color-aura-light: #F5F5F5;
+
+  --font-sans: "Inter", "system-ui", sans-serif;
+}
 
 @layer base {
   body {
