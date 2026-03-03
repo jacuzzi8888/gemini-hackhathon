@@ -1,15 +1,26 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { Eye, ShieldAlert, Mic, Settings, ArrowUp, ArrowDown, ArrowLeft, ArrowRight } from 'lucide-react'
+import { Eye, ShieldAlert, Settings, Smile } from 'lucide-react'
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
+
 import { MediaManager } from './lib/MediaManager'
 import { AudioPlayer } from './lib/AudioPlayer'
+
+import { Nexus } from './components/Nexus'
+import { GuardianList } from './components/GuardianList'
+import type { GuardianAlert } from './components/GuardianList'
+import { SocialMirror } from './components/SocialMirror'
+import { SettingsPanel } from './components/SettingsPanel'
+import { mockGuardianAlerts, mockSocialData } from './data/mockData'
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+type ViewMode = 'nexus' | 'guardian' | 'social' | 'settings'
+
 function App() {
+  const [activeView, setActiveView] = useState<ViewMode>('nexus')
   const [isActive, setIsActive] = useState(false)
   const [directorMessage, setDirectorMessage] = useState<string | null>(null)
 
@@ -32,13 +43,11 @@ function App() {
         captureInterval.current = window.setInterval(() => {
           const frame = mediaManager.current?.captureFrame()
           if (frame) {
-            // In the future, this goes to WebSocket
             console.log('Captured frame (base64 length):', frame.length)
           }
-        }, 1000) // 1fps for desktop testing
+        }, 1000)
 
         mediaManager.current.startAudioCapture((pcm16) => {
-          // In the future, this goes to WebSocket
           console.log('Captured audio chunk samples:', pcm16.length)
         })
 
@@ -67,79 +76,79 @@ function App() {
   }, [])
 
   return (
-    <div className="flex flex-col h-screen w-full bg-aura-dark text-aura-light">
-      {/* Top Status Bar */}
-      <header className="px-6 py-4 flex justify-between items-center border-b border-white/10">
-        <div className="flex items-center gap-2">
-          <div className={cn(
-            "w-3 h-3 rounded-full animate-pulse",
-            isActive ? "bg-aura-primary shadow-[0_0_10px_#FF4D00]" : "bg-white/20"
-          )} />
-          <span className="text-sm font-medium tracking-widest uppercase">
-            Aura {isActive ? 'Live' : 'Standby'}
-          </span>
-        </div>
-        <button className="p-2 rounded-full hover:bg-white/5 transition-colors">
-          <Settings className="w-5 h-5 opacity-60" />
-        </button>
-      </header>
-
-      {/* Main Interaction Area (The One Button) */}
-      <main className="flex-1 relative">
-        <button
-          onPointerDown={toggleAura}
-          className={cn(
-            "btn-aura flex-col gap-6 select-none",
-            isActive
-              ? "bg-aura-primary text-aura-dark shadow-[inset_0_0_100px_rgba(0,0,0,0.2)]"
-              : "bg-white/5 text-aura-light hover:bg-white/10"
-          )}
-        >
-          {isActive ? (
-            <>
-              <ShieldAlert className="w-24 h-24" />
-              <span className="text-xl">Guardian Active</span>
-            </>
-          ) : (
-            <>
-              <Eye className="w-24 h-24" />
-              <span className="text-xl">Hold to Aura</span>
-            </>
-          )}
-        </button>
-
-        {/* Dynamic Context Overlays & Director */}
-        {isActive && (
-          <div className="absolute inset-x-4 top-4 flex flex-col gap-4 pointer-events-none">
-            {/* The Director (Framing Guidance) */}
-            {directorMessage && (
-              <div className="bg-aura-primary/95 text-aura-dark p-6 rounded-2xl shadow-2xl flex items-center gap-4 animate-in fade-in slide-in-from-top-4 duration-500">
-                <ArrowUp className="w-8 h-8 animate-bounce" />
-                <p className="text-xl font-bold font-display">{directorMessage}</p>
+    <div className="flex flex-col h-[100dvh] w-full bg-aura-dark text-aura-light overflow-hidden">
+      {/* Dynamic Main Content Area */}
+      <main className="flex-1 relative w-full h-full overflow-hidden">
+        {activeView === 'nexus' && (
+          <>
+            {/* Header Layer (Only in Nexus Standby/Scanning) */}
+            <header className="absolute top-0 inset-x-0 px-8 py-10 flex justify-between items-center z-30 pointer-events-none">
+              <div className="flex items-center gap-3">
+                <div className={cn(
+                  "w-4 h-4 rounded-full transition-all duration-300",
+                  isActive ? "bg-aura-primary shadow-[0_0_15px_#137FEC]" : "bg-white/30"
+                )} />
+                <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/80">
+                  {isActive ? 'Live' : 'Ready'}
+                </span>
               </div>
-            )}
+              <button
+                onClick={() => setActiveView('settings')}
+                className="pointer-events-auto p-4 rounded-full text-white/60 hover:text-white transition-colors"
+              >
+                <Settings className="w-8 h-8" />
+              </button>
+            </header>
 
-            {/* Pathfinder Feedback */}
-            <div className="bg-aura-dark/80 backdrop-blur-md p-4 rounded-xl border border-white/10 border-l-4 border-l-aura-secondary">
-              <p className="text-sm opacity-60 uppercase mb-1">Pathfinder</p>
-              <p className="text-lg font-bold">Clear path ahead. 2.5 meters.</p>
-            </div>
-          </div>
+            <Nexus
+              isActive={isActive}
+              directorMessage={directorMessage}
+              onToggle={toggleAura}
+            />
+          </>
+        )}
+
+        {activeView === 'guardian' && (
+          <GuardianList alerts={mockGuardianAlerts as GuardianAlert[]} />
+        )}
+
+        {activeView === 'social' && (
+          <SocialMirror data={isActive || true ? mockSocialData : null} />
+        )}
+
+        {activeView === 'settings' && (
+          <SettingsPanel onClose={() => setActiveView('nexus')} />
         )}
       </main>
 
-      {/* Bottom Action Bar */}
-      <footer className="px-8 py-8 flex justify-around items-center bg-white/5 backdrop-blur-sm">
-        <button className="flex flex-col items-center gap-2 opacity-40">
-          <Mic className="w-6 h-6" />
-          <span className="text-[10px] uppercase tracking-tighter">Voice</span>
-        </button>
-        <div className="w-[1px] h-8 bg-white/10" />
-        <button className="flex flex-col items-center gap-2 text-aura-secondary">
-          <ShieldAlert className="w-6 h-6" />
-          <span className="text-[10px] uppercase tracking-tighter">Safety</span>
-        </button>
-      </footer>
+      {/* Persistent Bottom Nav (Hidden if in settings) */}
+      {activeView !== 'settings' && (
+        <nav className="relative z-30 flex justify-around items-center px-6 py-8 bg-aura-dark border-t border-white/10">
+          <button
+            onClick={() => setActiveView('guardian')}
+            className={cn("flex flex-col items-center gap-2 transition-colors", activeView === 'guardian' ? "text-white" : "text-white/40")}
+          >
+            <ShieldAlert className="w-8 h-8" />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Alerts</span>
+          </button>
+
+          <button
+            onClick={() => setActiveView('nexus')}
+            className={cn("flex flex-col items-center gap-2 transition-colors", activeView === 'nexus' ? "text-aura-primary" : "text-white/40")}
+          >
+            <Eye className="w-10 h-10" />
+            <span className="text-[10px] flex items-center justify-center font-bold uppercase tracking-widest mt-1">Scan</span>
+          </button>
+
+          <button
+            onClick={() => setActiveView('social')}
+            className={cn("flex flex-col items-center gap-2 transition-colors", activeView === 'social' ? "text-aura-social" : "text-white/40")}
+          >
+            <Smile className="w-8 h-8" />
+            <span className="text-[10px] font-bold uppercase tracking-widest">Social</span>
+          </button>
+        </nav>
+      )}
     </div>
   )
 }

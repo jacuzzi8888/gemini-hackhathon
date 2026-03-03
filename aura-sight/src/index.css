@@ -1,14 +1,20 @@
 @import "tailwindcss";
 
 @theme {
-  --color-aura-primary: #FF4D00;
-  --color-aura-secondary: #00E0FF;
-  --color-aura-accent: #7000FF;
+  --color-aura-primary: #137FEC;
+  /* Electric Cyan: Active/Scanning state */
+  --color-aura-warning: #FF4D00;
+  /* Safety Orange: Critical warnings */
+  --color-aura-social: #7000FF;
+  /* Social Mirror accent */
   --color-aura-dark: #0A0A0A;
-  --color-aura-light: #F5F5F5;
+  /* Pitch Black Canvas */
+  --color-aura-light: #FFFFFF;
+  /* Pure High-Contrast White */
 
   --font-sans: "Inter", "system-ui", sans-serif;
 }
+
 
 @layer base {
   body {

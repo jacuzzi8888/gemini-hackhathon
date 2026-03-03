@@ -1,0 +1,97 @@
+<html class="dark"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#137fec",
+                        "background-light": "#f6f7f8",
+                        "background-dark": "#0A0A0A",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .nexus-ring {
+            width: 220px;
+            height: 220px;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+        }
+        .nexus-ring-inner {
+            width: 200px;
+            height: 200px;
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            border-radius: 50%;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 font-display selection:bg-primary/30">
+<div class="relative flex h-screen w-full flex-col overflow-hidden">
+<header class="flex items-center justify-between px-6 pt-12 pb-6">
+<button class="flex size-10 items-center justify-start text-slate-100/60 hover:text-slate-100 transition-colors">
+<span class="material-symbols-outlined text-[28px]">menu</span>
+</button>
+<h2 class="text-slate-100 text-sm font-semibold tracking-[0.2em] uppercase opacity-80">Aura Sight</h2>
+<button class="flex size-10 items-center justify-end text-slate-100/60 hover:text-slate-100 transition-colors">
+<span class="material-symbols-outlined text-[28px]">settings</span>
+</button>
+</header>
+<main class="flex flex-1 flex-col items-center justify-center px-8">
+<div class="relative flex items-center justify-center">
+<div class="nexus-ring animate-pulse">
+<div class="nexus-ring-inner"></div>
+</div>
+</div>
+<div class="mt-16 text-center">
+<p class="text-slate-100 text-lg font-medium tracking-tight opacity-90">Long press to scan</p>
+<p class="text-slate-500 text-xs font-normal tracking-wider uppercase mt-2">The Nexus Standby</p>
+</div>
+</main>
+<nav class="flex w-full items-center justify-between px-10 pb-10 pt-4">
+<a class="flex flex-col items-center gap-1 text-primary" href="#">
+<span class="material-symbols-outlined text-[32px] fill-1">visibility</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Vision</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-slate-100/40 hover:text-slate-100 transition-colors" href="#">
+<span class="material-symbols-outlined text-[32px]">history</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">History</span>
+</a>
+<a class="flex flex-col items-center gap-1 text-slate-100/40 hover:text-slate-100 transition-colors" href="#">
+<span class="material-symbols-outlined text-[32px]">person</span>
+<span class="text-[10px] font-bold uppercase tracking-widest">Profile</span>
+</a>
+</nav>
+<div class="absolute inset-0 pointer-events-none bg-gradient-to-b from-transparent via-transparent to-background-dark/40"></div>
+</div>
+</body></html>
