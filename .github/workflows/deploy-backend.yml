@@ -39,13 +39,13 @@ jobs:
 
       - name: Build and Push Container
         run: |-
-          docker build -t gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} ./server
-          docker push gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }}
+          docker build -t us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/aura-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} ./server
+          docker push us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/aura-repo/${{ env.SERVICE_NAME }}:${{ github.sha }}
 
       - name: Deploy to Cloud Run
         run: |-
           gcloud run deploy ${{ env.SERVICE_NAME }} \
-            --image gcr.io/${{ env.PROJECT_ID }}/${{ env.SERVICE_NAME }}:${{ github.sha }} \
+            --image us-central1-docker.pkg.dev/${{ env.PROJECT_ID }}/aura-repo/${{ env.SERVICE_NAME }}:${{ github.sha }} \
             --platform managed \
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
