@@ -9,8 +9,14 @@ export class LiveAPIClient {
     private onAudioHandler: (data: Int16Array) => void = () => { };
     private isConnected: boolean = false;
 
-    constructor(url: string = 'ws://localhost:8080') {
-        this.url = url;
+    constructor(url?: string) {
+        if (url) {
+            this.url = url;
+        } else {
+            // Use protocol-relative logic for the default URL
+            const protocol = API_BASE_URL.includes('localhost') ? 'ws' : 'wss';
+            this.url = `${protocol}://${API_BASE_URL}`;
+        }
     }
 
     /**
