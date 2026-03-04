@@ -38,8 +38,9 @@ export class LiveAPIClient {
                         generation_config: {
                             response_modalities: ["audio", "text"],
                         },
-                        parts: [{
-                            text: `You are Aura Sight, a frontier-class multisensory AI companion.
+                        system_instruction: {
+                            parts: [{
+                                text: `You are Aura Sight, a frontier-class multisensory AI companion.
 Your goal is to provide superhuman spatial awareness and social empathy for the visually impaired.
 
 INTELLIGENCE DIRECTIVES:
@@ -48,7 +49,8 @@ INTELLIGENCE DIRECTIVES:
 3. DIGNIFIED ASSISTANCE: Provide high-accuracy identification for critical tasks (prescriptions, allergens, style).
 4. CONCISE & VIVID: Be ultra-concise (<12 words) but use vivid, helpful language.
 5. PRIORITY: Safety alerts ALWAYS take precedence over any ongoing description.`
-                        }]
+                            }]
+                        }
                     }
                 };
                 this.ws?.send(JSON.stringify(setupMessage));
