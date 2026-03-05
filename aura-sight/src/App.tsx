@@ -6,6 +6,7 @@ import { twMerge } from 'tailwind-merge'
 import { MediaManager } from './lib/MediaManager'
 import { AudioPlayer } from './lib/AudioPlayer'
 import { LiveAPIClient } from './lib/LiveAPIClient'
+import { unlockAudio, playEarcon } from './lib/Earcon'
 
 import { Nexus } from './components/Nexus'
 import { SettingsPanel } from './components/SettingsPanel'
@@ -14,101 +15,150 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'error'
 type ViewMode = 'nexus' | 'settings'
 
 function App() {
   const [activeView, setActiveView] = useState<ViewMode>('nexus')
-  const [isActive, setIsActive] = useState(false)
+  const [status, setStatus] = useState<AuraStatus>('idle')
   const [directorMessage, setDirectorMessage] = useState<string | null>(null)
 
   const mediaManager = useRef<MediaManager | null>(null)
   const audioPlayer = useRef<AudioPlayer | null>(null)
   const apiClient = useRef<LiveAPIClient | null>(null)
   const captureInterval = useRef<number | null>(null)
+  const heartbeatInterval = useRef<number | null>(null)
 
-  const toggleAura = useCallback(async () => {
-    console.log("toggleAura called, isActive:", isActive);
-    if (!isActive) {
-      // Starting Aura
-      if (!mediaManager.current) mediaManager.current = new MediaManager()
-      if (!audioPlayer.current) audioPlayer.current = new AudioPlayer()
-      if (!apiClient.current) apiClient.current = new LiveAPIClient()
+  // ── Haptic Heartbeat ──
+  const startHeartbeat = useCallback(() => {
+    if (!('vibrate' in navigator)) return
+    heartbeatInterval.current = window.setInterval(() => {
+      navigator.vibrate(40)
+    }, 2000)
+  }, [])
 
-      console.log("Initializing media...");
-      const success = await mediaManager.current.initialize()
-      console.log("Media initialization success:", success);
-      if (success) {
-        setIsActive(true)
-        await audioPlayer.current.resume()
+  const stopHeartbeat = useCallback(() => {
+    if (heartbeatInterval.current) {
+      clearInterval(heartbeatInterval.current)
+      heartbeatInterval.current = null
+    }
+  }, [])
 
-        try {
-          // Setup WebSocket Client listeners
-          apiClient.current!.onContent((text) => {
-            setDirectorMessage(text)
-          })
+  // ── Start Recording ──
+  const startRecording = useCallback(async () => {
+    // Unlock audio context on user gesture
+    await unlockAudio()
 
-          apiClient.current!.onAudio((pcm16) => {
-            audioPlayer.current?.queueAudio(pcm16)
-          })
+    if (!mediaManager.current) mediaManager.current = new MediaManager()
+    if (!audioPlayer.current) audioPlayer.current = new AudioPlayer()
+    if (!apiClient.current) apiClient.current = new LiveAPIClient()
 
-          await apiClient.current!.connect()
+    const success = await mediaManager.current.initialize()
+    if (!success) {
+      setStatus('error')
+      playEarcon('error')
+      setDirectorMessage('Camera access denied')
+      return
+    }
 
-          // Start Capture Loop
-          captureInterval.current = window.setInterval(() => {
-            const frame = mediaManager.current?.captureFrame()
-            if (frame && apiClient.current) {
-              apiClient.current.sendVideoFrame(frame)
-            }
-          }, 1000)
+    setStatus('recording')
+    playEarcon('start')
+    setDirectorMessage('Listening...')
+    startHeartbeat()
 
-          mediaManager.current.startAudioCapture((pcm16) => {
-            apiClient.current?.sendAudioChunk(pcm16)
-          })
+    // Haptic tick on activation
+    if ('vibrate' in navigator) navigator.vibrate([80, 40, 80])
 
-          // Play Start Chime
-          const ctx = new AudioContext();
-          const osc = ctx.createOscillator();
-          const gain = ctx.createGain();
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(880, ctx.currentTime);
-          osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.5);
-          gain.gain.setValueAtTime(0.1, ctx.currentTime);
-          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-          osc.connect(gain);
-          gain.connect(ctx.destination);
-          osc.start();
-          osc.stop(ctx.currentTime + 0.5);
+    try {
+      await audioPlayer.current.resume()
 
-          setDirectorMessage("Listening...")
-        } catch (err) {
-          console.error("Failed to start Aura session:", err)
-          setIsActive(false)
-          setDirectorMessage("Session Error")
-          mediaManager.current?.stop()
+      // Setup content & audio handlers
+      apiClient.current!.onContent((text) => {
+        setDirectorMessage(text)
+        setStatus('responding')
+        stopHeartbeat()
+      })
+
+      apiClient.current!.onAudio((pcm16) => {
+        audioPlayer.current?.queueAudio(pcm16)
+      })
+
+      await apiClient.current!.connect()
+
+      // Start capture loop (1 FPS video frames)
+      captureInterval.current = window.setInterval(() => {
+        const frame = mediaManager.current?.captureFrame()
+        if (frame && apiClient.current) {
+          apiClient.current.sendVideoFrame(frame)
         }
-      }
-    } else {
-      // Stopping Aura
-      setIsActive(false)
+      }, 1000)
+
+      // Start audio capture to Gemini
+      mediaManager.current.startAudioCapture((pcm16) => {
+        apiClient.current?.sendAudioChunk(pcm16)
+      })
+
+    } catch (err) {
+      console.error('Failed to start Aura session:', err)
+      setStatus('error')
+      playEarcon('error')
+      setDirectorMessage('Connection failed')
+      stopHeartbeat()
       mediaManager.current?.stop()
-      audioPlayer.current?.stop()
-      apiClient.current?.disconnect()
-      if (captureInterval.current) clearInterval(captureInterval.current)
-      setDirectorMessage(null)
+    }
+  }, [startHeartbeat, stopHeartbeat])
+
+  // ── Stop Recording -> Thinking ──
+  const stopRecording = useCallback(() => {
+    // Stop sending audio (user released)
+    // But keep the WebSocket open so Gemini can respond!
+    if (captureInterval.current) {
+      clearInterval(captureInterval.current)
+      captureInterval.current = null
     }
 
-    // Haptic feedback
-    if ('vibrate' in navigator) {
-      navigator.vibrate(isActive ? 50 : [100, 50, 100])
+    // Send one final high-res frame for Gemini's summary
+    const frame = mediaManager.current?.captureFrame()
+    if (frame && apiClient.current) {
+      apiClient.current.sendVideoFrame(frame)
     }
-  }, [isActive])
+
+    // Stop microphone but keep camera alive briefly
+    mediaManager.current?.stop()
+
+    setStatus('thinking')
+    playEarcon('thinking')
+    setDirectorMessage('Processing...')
+    stopHeartbeat()
+
+    // Haptic double-pulse
+    if ('vibrate' in navigator) navigator.vibrate([50, 80, 50])
+  }, [stopHeartbeat])
+
+  // ── Full Cancel / Reset ──
+  const cancelSession = useCallback(() => {
+    setStatus('idle')
+    setDirectorMessage(null)
+    stopHeartbeat()
+    mediaManager.current?.stop()
+    audioPlayer.current?.stop()
+    apiClient.current?.disconnect()
+    if (captureInterval.current) {
+      clearInterval(captureInterval.current)
+      captureInterval.current = null
+    }
+  }, [stopHeartbeat])
 
   useEffect(() => {
     return () => {
       mediaManager.current?.stop()
+      stopHeartbeat()
       if (captureInterval.current) clearInterval(captureInterval.current)
     }
-  }, [])
+  }, [stopHeartbeat])
+
+  // Determine active-like states for UI
+  const isEngaged = status !== 'idle'
 
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-aura-dark text-aura-light overflow-hidden relative">
@@ -122,15 +172,23 @@ function App() {
       <main className="flex-1 relative w-full h-full overflow-hidden z-10">
         {activeView === 'nexus' && (
           <>
-            {/* Header Layer (Only in Nexus Standby/Scanning) */}
+            {/* Header Layer */}
             <header className="absolute top-0 inset-x-0 px-8 py-10 flex justify-between items-center z-30 pointer-events-none">
               <div className="flex items-center gap-3">
                 <div className={cn(
                   "w-4 h-4 rounded-full transition-all duration-300",
-                  isActive ? "bg-aura-primary shadow-[0_0_15px_#137FEC]" : "bg-white/30"
+                  status === 'recording' && "bg-red-500 shadow-[0_0_15px_#EF4444] animate-pulse",
+                  status === 'thinking' && "bg-amber-400 shadow-[0_0_15px_#F59E0B] animate-pulse",
+                  status === 'responding' && "bg-green-400 shadow-[0_0_15px_#4ADE80] animate-pulse",
+                  status === 'error' && "bg-red-600",
+                  status === 'idle' && "bg-white/30"
                 )} />
                 <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/80">
-                  {isActive ? 'Live' : 'Ready'}
+                  {status === 'idle' && 'Ready'}
+                  {status === 'recording' && 'Recording'}
+                  {status === 'thinking' && 'Thinking'}
+                  {status === 'responding' && 'Speaking'}
+                  {status === 'error' && 'Error'}
                 </span>
               </div>
               <button
@@ -142,9 +200,11 @@ function App() {
             </header>
 
             <Nexus
-              isActive={isActive}
+              status={status}
               directorMessage={directorMessage}
-              onToggle={toggleAura}
+              onStartRecording={startRecording}
+              onStopRecording={stopRecording}
+              onCancel={cancelSession}
             />
           </>
         )}
@@ -155,19 +215,23 @@ function App() {
         )}
       </main>
 
-      {/* Persistent Bottom Nav (Simplified) */}
+      {/* Persistent Bottom Nav */}
       {activeView !== 'settings' && (
         <nav className="relative z-30 flex justify-center items-center px-6 py-8 bg-aura-dark border-t border-white/10">
           <button
             onClick={() => setActiveView('nexus')}
             className={cn(
               "flex flex-col items-center gap-2 transition-all duration-500 px-10 py-2 rounded-full",
-              isActive ? "text-aura-primary scale-110" : "text-white/40 hover:text-white/60"
+              isEngaged ? "text-aura-primary scale-110" : "text-white/40 hover:text-white/60"
             )}
           >
-            <Eye className={cn("w-10 h-10 transition-transform duration-500", isActive && "animate-pulse")} />
+            <Eye className={cn("w-10 h-10 transition-transform duration-500", isEngaged && "animate-pulse")} />
             <span className="text-[10px] font-bold uppercase tracking-[0.3em] mt-1">
-              {isActive ? 'Aura Active' : 'Hold to Scan'}
+              {status === 'idle' && 'Hold to Scan'}
+              {status === 'recording' && 'Recording...'}
+              {status === 'thinking' && 'Thinking...'}
+              {status === 'responding' && 'Aura Speaking'}
+              {status === 'error' && 'Tap to Retry'}
             </span>
           </button>
         </nav>
