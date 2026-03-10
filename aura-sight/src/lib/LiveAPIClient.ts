@@ -1,3 +1,8 @@
+const PRODUCTION_PROXY_URL = 'aura-proxy-432140310963.us-central1.run.app';
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'localhost:8080'
+    : PRODUCTION_PROXY_URL;
+
 /**
  * LiveAPIClient handles the WebSocket connection to the Aura Proxy,
  * managing the bidirectional stream of audio/video to Gemini Multimodal Live API.
