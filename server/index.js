@@ -3,6 +3,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
+import { GoogleAuth } from 'google-auth-library';
 
 dotenv.config();
 
@@ -18,22 +19,19 @@ const PORT = process.env.PORT || 8080;
 let secretClient = null;
 
 /**
- * Retrieves the Gemini API Key from environment or Google Cloud Secret Manager.
+ * Retrieves an OAuth2 Access Token for Vertex AI.
+ * Uses Service Account credentials from the environment.
  */
-async function getApiKey() {
-    if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
-
+async function getAccessToken() {
     try {
-        if (!secretClient) {
-            secretClient = new SecretManagerServiceClient();
-        }
-        const project = process.env.GOOGLE_CLOUD_PROJECT || 'ocellus-488718';
-        const [version] = await secretClient.accessSecretVersion({
-            name: `projects/${project}/secrets/GEMINI_API_KEY/versions/latest`,
+        const auth = new GoogleAuth({
+            scopes: 'https://www.googleapis.com/auth/cloud-platform',
         });
-        return version.payload.data.toString();
+        const client = await auth.getClient();
+        const token = await client.getAccessToken();
+        return token.token;
     } catch (err) {
-        console.warn("Secret Manager access failed (missing ADC or project config). Please set GEMINI_API_KEY in .env for local dev.");
+        console.error("Failed to retrieve Access Token:", err);
         return null;
     }
 }
@@ -47,18 +45,24 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', async (ws, req) => {
     console.log('New client connection request to Aura Proxy');
 
-    const apiKey = await getApiKey();
+    const accessToken = await getAccessToken();
 
-    if (!apiKey) {
-        console.error('CRITICAL: Gemini API Key is missing. Proxy cannot function.');
-        ws.close(1011, 'Internal Server Error: API Key Missing');
+    if (!accessToken) {
+        console.error('CRITICAL: Access Token is missing. Proxy cannot function.');
+        ws.close(1011, 'Internal Server Error: Auth Failed');
         return;
     }
 
-    // The Multimodal Live API endpoint for Gemini
-    const googleUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+    // Vertex AI Multimodal Live API WebSocket endpoint
+    const project = process.env.GOOGLE_CLOUD_PROJECT || 'ocellus-488718';
+    const location = 'us-central1';
+    const googleUrl = `wss://${location}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent`;
 
-    const googleWs = new WebSocket(googleUrl);
+    const googleWs = new WebSocket(googleUrl, {
+        headers: {
+            'Authorization': `Bearer ${accessToken}`
+        }
+    });
 
     // Proxy messages from Google back to the Client
     googleWs.on('message', (data) => {
