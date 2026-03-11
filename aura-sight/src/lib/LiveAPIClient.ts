@@ -91,7 +91,13 @@ PROACTIVE BEHAVIORS:
             };
 
             this.ws.onmessage = async (event) => {
-                const data = JSON.parse(event.data);
+                let text: string;
+                if (event.data instanceof Blob) {
+                    text = await event.data.text();
+                } else {
+                    text = event.data;
+                }
+                const data = JSON.parse(text);
                 this.handleServerMessage(data);
             };
 
