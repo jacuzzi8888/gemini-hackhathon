@@ -80,6 +80,8 @@ function App() {
       })
 
       apiClient.current!.onAudio((pcm16) => {
+        setStatus('responding')
+        stopHeartbeat()
         audioPlayer.current?.queueAudio(pcm16)
       })
 
