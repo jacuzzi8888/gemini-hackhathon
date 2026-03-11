@@ -1,7 +1,6 @@
 # **Context: Aura Sight Technical Architecture**
 
-## **1. Technical Stack**
-*   **AI Model**: `gemini-live-2.5-flash-native-audio` (Gemini Multimodal Live API via `v1beta`).
+## **2026 Alignment**: Attempted `v1beta` migration, but transitioned to `v1alpha` + `gemini-2.0-flash-exp` for absolute stability during the March 2026 shuffle.
 *   **Audio Engine**: `AudioWorklet` (pcm-processor.worklet.js) + `AudioPlayer.ts` (PCM16 chunks).
 *   **Interaction Logic**: `AuraStatus` State Machine (idle -> recording -> thinking -> responding).
 *   **Backend**: Node.js/Express WebSocket Proxy (Deployed to **Google Cloud Run**).
