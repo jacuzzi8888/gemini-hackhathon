@@ -39,14 +39,14 @@ export class LiveAPIClient {
                 const sendSetup = () => {
                     if (this.ws?.readyState === WebSocket.OPEN) {
                         this.isConnected = true;
-                        // Initial Setup Message for Gemini
+                        // Initial Setup Message for Vertex AI (camelCase required)
                         const setupMessage = {
                             setup: {
                                 model: "projects/ocellus-488718/locations/us-central1/models/gemini-live-2.5-flash-native-audio",
-                                generation_config: {
-                                    response_modalities: ["audio", "text"],
+                                generationConfig: {
+                                    responseModalities: ["AUDIO", "TEXT"],
                                 },
-                                system_instruction: {
+                                systemInstruction: {
                                     parts: [{
                                         text: `You are Aura Sight, a frontier-class multisensory AI companion for the visually impaired. You see through the user's camera and hear their voice in real-time.
 
@@ -127,7 +127,7 @@ PROACTIVE BEHAVIORS:
                     if (part.text) {
                         this.onContentHandler(part.text);
                     }
-                    if (part.inlineData && part.inlineData.mimeType === 'audio/pcm;rate=16000') {
+                    if (part.inlineData && (part.inlineData.mimeType === 'AUDIO' || part.inlineData.mimeType === 'audio/pcm;rate=16000')) {
                         // Convert base64 audio to Int16Array
                         const binaryString = atob(part.inlineData.data);
                         const len = binaryString.length;
@@ -156,10 +156,10 @@ PROACTIVE BEHAVIORS:
         if (!this.isConnected || !this.ws) return;
 
         const message = {
-            realtime_input: {
-                media_chunks: [
+            realtimeInput: {
+                mediaChunks: [
                     {
-                        mime_type: "image/jpeg",
+                        mimeType: "image/jpeg",
                         data: base64Frame
                     }
                 ]
@@ -184,10 +184,10 @@ PROACTIVE BEHAVIORS:
         const base64Audio = btoa(binary);
 
         const message = {
-            realtime_input: {
-                media_chunks: [
+            realtimeInput: {
+                mediaChunks: [
                     {
-                        mime_type: "audio/pcm;rate=16000",
+                        mimeType: "audio/pcm;rate=16000",
                         data: base64Audio
                     }
                 ]
