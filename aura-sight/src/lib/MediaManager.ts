@@ -102,7 +102,7 @@ export class MediaManager {
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
         }
-        if (this.audioContext) {
+        if (this.audioContext && this.audioContext.state !== 'closed') {
             this.audioContext.close();
         }
         if (this.processor) {

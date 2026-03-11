@@ -1,25 +1,35 @@
-# **Context: Technical Stack & Implementation Guide**
+# **Context: Aura Sight Technical Architecture**
 
-## **1\. Technical Stack**
+## **1. Technical Stack**
 
-* **AI Model:** gemini-2.5-flash-preview-09-2025 (Optimized for vision-to-speech latency).  
-* **Communication:** WebSockets via the **Multimodal Live API**.  
-* **Frontend:** React \+ Tailwind CSS (Mobile-responsive PWA).  
-* **Deployment:** Vercel (Frontend) \+ Google Cloud Functions/Run (for any stateful backend needs).
+*   **AI Model**: `gemini-3.1-flash-lite-preview` (Gemini Multimodal Live API).
+*   **Audio Engine**: `Earcon.ts` (Synthesized Web Audio) + `AudioPlayer.ts` (PCM16 chunks).
+*   **Interaction Logic**: `AuraStatus` State Machine (idle -> recording -> thinking -> responding).
+*   **Backend**: Node.js/Express WebSocket Proxy (Deployed to **Google Cloud Run**).
+*   **Frontend**: React + Tailwind CSS (Deployed to **Vercel**).
+*   **Infrastructure**: GCP Secret Manager (GEMINI_API_KEY) + GitHub Actions (WIF Auth).
 
-## **2\. API Interaction Flow**
+## **2. Aura Sentinel Interaction Flow**
 
-1. **Media Access:** App requests getUserMedia for both audio and video.  
-2. **Stream Setup:** Open a WebSocket connection to wss://generativelanguage.googleapis.com/....  
-3. **Continuous Feed:** Send 15-30 frames per second (vision) \+ PCM16 audio (speech) to Gemini.  
-4. **Model Response:** Gemini sends back PCM16 audio which is played through the user's headphones immediately.
+1.  **Hold-to-Talk**: User long-presses the Nexus ring (>800ms).
+    *   `Earcon: start` chime plays.
+    *   Haptic Heartbeat (40ms Every 2s) starts.
+2.  **Multimodal Stream**: While holding, camera frames (1 FPS) and PCM16 audio are streamed to the proxy.
+3.  **Release-to-Process**: User releases the ring.
+    *   `Earcon: thinking` sweep plays.
+    *   State transitions to `thinking`.
+4.  **Aura Response**: Gemini streams back text and audio.
+    *   State transitions to `responding`.
+    *   "Aura Director" logic guides the user's camera ("Tilt up", "Move left").
 
-## **3\. Hardware Roadmap (Pitch Content)**
+## **3. Key Production Configs**
 
-* **Current MVP:** Mobile Phone (Hand-held or Chest-pocket).  
-* **Phase 2 (Post-Hackathon):** Bluetooth integration with **UVC-compatible camera glasses**. These glasses act as a standard camera peripheral for the mobile device, allowing Aura to see exactly what the user sees from eye level.
+*   **Proxy URL**: `aura-proxy-432140310963.us-central1.run.app`
+*   **Key Source**: `Secret Manager` (Project `ocellus-488718`).
+*   **Unified Model**: The app has pivoted to a "Sentinel" UX—no separate tabs for Alerts/Social. Everything is oral and centered on the Nexus ring.
 
-## **4\. Key Implementation Challenges**
+## **4. Current State (Ready for Next Session)**
 
-* **Token Management:** Ensuring the "Pathfinder" mode is efficient to stay within free-tier limits.  
-* **Framing Logic:** Calibrating the "Director" instructions to be intuitive for someone who cannot see the screen.
+*   ✅ **Sentinel Transformation Completed**: Audio, Haptics, and State Machine are 100% integrated.
+*   ✅ **Deployment Reliable**: Cloud Run permissions and Vercel environment detection are fixed.
+*   ✅ **Gemini 3 Flash Active**: The AI is programmed to be proactive and safety-first.

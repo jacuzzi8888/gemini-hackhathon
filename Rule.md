@@ -35,5 +35,11 @@ These rules govern the behavior of the AI agent for the Aura Sight project.
 - When facing repeated errors or issues (e.g., failed deployment steps), the agent should research the best way to go about it on the internet.
 - The agent must ensure the information or fix found is the most up-to-date and relevant to current standards (e.g., awareness of "2026-style" configurations).
 
+## 9. PWA & Deployment Troubleshooting
+- When a live deployment (e.g., Vercel) appears to run outdated code or shows 404s for legacy assets, the agent MUST:
+    1. Instruct the user to perform a **Hard Refresh** (Ctrl + F5).
+    2. Check the **Service Worker** status in DevTools and instruct the user to **Unregister** it if it's serving a stale version.
+    3. Verify if the browser is using a cached **Manifest** or old build artifacts.
+
 ---
 *Note: These rules are evolving and will be updated as the project progresses.*
