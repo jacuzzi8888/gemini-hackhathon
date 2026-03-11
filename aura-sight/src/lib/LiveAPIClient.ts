@@ -12,6 +12,7 @@ export class LiveAPIClient {
     private readonly url: string;
     private onContentHandler: (text: string) => void = () => { };
     private onAudioHandler: (data: Int16Array) => void = () => { };
+    private onDisconnectHandler: (reason: string) => void = () => { };
     private isConnected: boolean = false;
 
     constructor(url?: string) {
@@ -85,6 +86,7 @@ EMOTIONAL INTELLIGENCE:
             this.ws.onclose = (event) => {
                 console.log('LiveAPIClient: Disconnected from Aura Proxy', event.code, event.reason);
                 this.isConnected = false;
+                this.onDisconnectHandler(event.reason || `Code: ${event.code}`);
                 reject(new Error(`WebSocket closed: ${event.code} ${event.reason}`));
             };
 
@@ -194,6 +196,13 @@ EMOTIONAL INTELLIGENCE:
      */
     onAudio(handler: (data: Int16Array) => void) {
         this.onAudioHandler = handler;
+    }
+
+    /**
+     * Registers a callback for unexpected disconnections.
+     */
+    onDisconnect(handler: (reason: string) => void) {
+        this.onDisconnectHandler = handler;
     }
 
     /**

@@ -83,6 +83,16 @@ function App() {
         audioPlayer.current?.queueAudio(pcm16)
       })
 
+      // Handle unexpected disconnection
+      apiClient.current!.onDisconnect((error) => {
+        console.error('Aura session disconnected:', error)
+        setStatus('error')
+        playEarcon('error')
+        setDirectorMessage('Connection lost')
+        stopHeartbeat()
+        mediaManager.current?.stop()
+      })
+
       await apiClient.current!.connect()
 
       // Start capture loop (1 FPS video frames)
