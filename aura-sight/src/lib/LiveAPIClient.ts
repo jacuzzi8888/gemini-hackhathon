@@ -163,10 +163,10 @@ PROACTIVE BEHAVIORS:
         if (!this.isConnected || !this.ws) return;
 
         const message = {
-            realtime_input: {
-                media_chunks: [
+            realtimeInput: {
+                mediaChunks: [
                     {
-                        mime_type: "image/jpeg",
+                        mimeType: "image/jpeg",
                         data: base64Frame
                     }
                 ]
@@ -191,10 +191,10 @@ PROACTIVE BEHAVIORS:
         const base64Audio = btoa(binary);
 
         const message = {
-            realtime_input: {
-                media_chunks: [
+            realtimeInput: {
+                mediaChunks: [
                     {
-                        mime_type: "audio/pcm;rate=16000",
+                        mimeType: "audio/pcm;rate=16000",
                         data: base64Audio
                     }
                 ]
@@ -210,12 +210,12 @@ PROACTIVE BEHAVIORS:
     sendTurnComplete() {
         if (!this.isConnected || !this.ws) return;
         const message = {
-            client_content: {
-                turn_complete: true
+            clientContent: {
+                turnComplete: true
             }
         };
         this.ws.send(JSON.stringify(message));
-        console.log('LiveAPIClient: Sent turn_complete signal');
+        console.log('LiveAPIClient: Sent turnComplete signal');
     }
 
     /**
