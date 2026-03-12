@@ -83,6 +83,8 @@ function App() {
         setStatus('responding')
         stopHeartbeat()
         audioPlayer.current?.queueAudio(pcm16)
+        // Stop media tracks after first audio response (Gemini is now responding)
+        mediaManager.current?.stop()
       })
 
       // Handle user interruption — immediately clear AI audio
@@ -108,7 +110,6 @@ function App() {
         setStatus('idle')
         setDirectorMessage('Reconnected')
         playEarcon('success')
-        // Clear message after 2 seconds
         setTimeout(() => setDirectorMessage(null), 2000)
       })
 
@@ -124,18 +125,26 @@ function App() {
 
       await apiClient.current!.connect()
 
-      // Start capture loop (1 FPS video frames)
+      // IMPORTANT: Await audio capture setup — worklet must be loaded before user can release
+      await mediaManager.current.startAudioCapture((pcm16) => {
+        apiClient.current?.sendAudioChunk(pcm16)
+      })
+      console.log('Audio capture started — worklet loaded')
+
+      // Send first video frame IMMEDIATELY (don't wait 1s for interval)
+      const firstFrame = mediaManager.current?.captureFrame()
+      if (firstFrame && apiClient.current) {
+        apiClient.current.sendVideoFrame(firstFrame)
+        console.log('First video frame sent')
+      }
+
+      // Then continue sending frames every 1 second
       captureInterval.current = window.setInterval(() => {
         const frame = mediaManager.current?.captureFrame()
         if (frame && apiClient.current) {
           apiClient.current.sendVideoFrame(frame)
         }
       }, 1000)
-
-      // Start audio capture to Gemini
-      mediaManager.current.startAudioCapture((pcm16) => {
-        apiClient.current?.sendAudioChunk(pcm16)
-      })
 
     } catch (err) {
       console.error('Failed to start Aura session:', err)
@@ -149,14 +158,13 @@ function App() {
 
   // ── Stop Recording -> Thinking ──
   const stopRecording = useCallback(() => {
-    // Stop sending audio (user released)
-    // But keep the WebSocket open so Gemini can respond!
+    // Stop sending NEW video frames
     if (captureInterval.current) {
       clearInterval(captureInterval.current)
       captureInterval.current = null
     }
 
-    // Send one final high-res frame for Gemini's summary
+    // Send one final video frame for Gemini's context
     const frame = mediaManager.current?.captureFrame()
     if (frame && apiClient.current) {
       apiClient.current.sendVideoFrame(frame)
@@ -165,8 +173,9 @@ function App() {
     // Signal to Gemini that user's turn is complete — triggers response generation
     apiClient.current?.sendTurnComplete()
 
-    // Stop microphone but keep camera alive briefly
-    mediaManager.current?.stop()
+    // DO NOT call mediaManager.stop() here!
+    // The audio/video tracks must stay alive until Gemini responds.
+    // They will be stopped when the first audio response arrives (in onAudio handler above).
 
     setStatus('thinking')
     playEarcon('thinking')
