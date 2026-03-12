@@ -100,6 +100,16 @@ function App() {
         setDirectorMessage('Reconnecting...')
       })
 
+      // Handle Gemini finishing its response — reset UI to idle
+      apiClient.current!.onTurnComplete(() => {
+        console.log('Gemini finished responding — resetting to idle')
+        setStatus('idle')
+        setDirectorMessage(null)
+        stopHeartbeat()
+        // Clean up media tracks now that the full exchange is done
+        mediaManager.current?.stop()
+      })
+
       // Handle reconnection events
       apiClient.current!.onReconnecting((attempt) => {
         setStatus('reconnecting')

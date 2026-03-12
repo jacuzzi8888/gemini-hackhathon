@@ -22,6 +22,7 @@ export class LiveAPIClient {
     private onDisconnectHandler: (reason: string) => void = () => { };
     private onInterruptedHandler: () => void = () => { };
     private onGoAwayHandler: (timeLeft: number) => void = () => { };
+    private onTurnCompleteHandler: () => void = () => { };
     private onReconnectingHandler: (attempt: number) => void = () => { };
     private onReconnectedHandler: () => void = () => { };
     private isConnected: boolean = false;
@@ -212,10 +213,10 @@ PROACTIVE BEHAVIORS:
         // Handle Session Resumption Token updates
         const sessionUpdate = message.sessionResumptionUpdate || message.session_resumption_update;
         if (sessionUpdate) {
-            const token = sessionUpdate.token || sessionUpdate.handle;
+            const token = sessionUpdate.newHandle || sessionUpdate.token || sessionUpdate.handle;
             if (token) {
                 this.resumptionToken = token;
-                console.log('LiveAPIClient: Session resumption token updated');
+                console.log('LiveAPIClient: Session resumption token updated:', token.substring(0, 8) + '...');
             }
             return;
         }
@@ -237,7 +238,8 @@ PROACTIVE BEHAVIORS:
                         this.onContentHandler(part.text);
                     }
                     const inlineData = part.inlineData || part.inline_data;
-                    if (inlineData && (inlineData.mimeType === 'AUDIO' || inlineData.mimeType === 'audio/pcm;rate=24000' || inlineData.mimeType === 'audio/pcm;rate=16000' || inlineData.mime_type === 'AUDIO')) {
+                    const mime = inlineData?.mimeType || inlineData?.mime_type || '';
+                    if (inlineData && mime.startsWith('audio')) {
                         // Convert base64 audio to Int16Array
                         const binaryString = atob(inlineData.data);
                         const len = binaryString.length;
@@ -246,9 +248,16 @@ PROACTIVE BEHAVIORS:
                             bytes[i] = binaryString.charCodeAt(i);
                         }
                         const pcm16 = new Int16Array(bytes.buffer);
+                        console.log('[DEBUG] Audio chunk decoded, samples:', pcm16.length);
                         this.onAudioHandler(pcm16);
                     }
                 }
+            }
+
+            // Handle server-side turnComplete — model finished responding
+            if (serverContent.turnComplete || serverContent.turn_complete) {
+                console.log('Gemini turn complete');
+                this.onTurnCompleteHandler();
             }
         }
     }
@@ -338,6 +347,10 @@ PROACTIVE BEHAVIORS:
 
     onGoAway(handler: (timeLeft: number) => void) {
         this.onGoAwayHandler = handler;
+    }
+
+    onTurnComplete(handler: () => void) {
+        this.onTurnCompleteHandler = handler;
     }
 
     onReconnecting(handler: (attempt: number) => void) {
