@@ -131,6 +131,8 @@ PROACTIVE BEHAVIORS:
                 } else {
                     text = event.data;
                 }
+                // DEBUG: Log every raw message from server
+                console.log('[DEBUG] Raw server message:', text.substring(0, 500));
                 const data = JSON.parse(text);
                 this.handleServerMessage(data);
             };
@@ -267,6 +269,7 @@ PROACTIVE BEHAVIORS:
                 ]
             }
         };
+        console.log('[DEBUG] Sending video frame, size:', base64Frame.length);
         this.ws.send(JSON.stringify(message));
     }
 
@@ -295,6 +298,7 @@ PROACTIVE BEHAVIORS:
                 ]
             }
         };
+        console.log('[DEBUG] Sending audio chunk, samples:', pcm16Data.length, 'base64 len:', base64Audio.length);
         this.ws.send(JSON.stringify(message));
     }
 
@@ -309,6 +313,7 @@ PROACTIVE BEHAVIORS:
                 turnComplete: true
             }
         };
+        console.log('[DEBUG] Sending turnComplete:', JSON.stringify(message));
         this.ws.send(JSON.stringify(message));
         console.log('LiveAPIClient: Sent turnComplete signal');
     }
