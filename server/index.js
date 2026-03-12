@@ -16,6 +16,7 @@ app.get('/health', (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
+const PROXY_API_KEY = process.env.PROXY_API_KEY || '';
 let secretClient = null;
 
 /**
@@ -45,6 +46,24 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', async (ws, req) => {
     console.log('New client connection request to Aura Proxy');
 
+    // ── Proxy Authentication ──
+    // If PROXY_API_KEY is set, validate the client's key from URL params
+    if (PROXY_API_KEY) {
+        try {
+            const url = new URL(req.url || '/', `http://${req.headers.host}`);
+            const clientKey = url.searchParams.get('key');
+            if (clientKey !== PROXY_API_KEY) {
+                console.warn('Client rejected: invalid API key');
+                ws.close(4001, 'Unauthorized');
+                return;
+            }
+        } catch (e) {
+            console.warn('Client rejected: could not parse URL');
+            ws.close(4001, 'Unauthorized');
+            return;
+        }
+    }
+
     const accessToken = await getAccessToken();
 
     if (!accessToken) {
@@ -64,6 +83,11 @@ wss.on('connection', async (ws, req) => {
         }
     });
 
+    // ── Application-Level Heartbeat ──
+    // Browser WebSocket API cannot send native pings.
+    // We send server-side pings to keep the connection alive through load balancers.
+    let heartbeatInterval = null;
+
     // Proxy messages from Google back to the Client
     googleWs.on('message', (data, isBinary) => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -80,25 +104,42 @@ wss.on('connection', async (ws, req) => {
 
     googleWs.on('open', () => {
         console.log('Successfully bridged to Google Multimodal Live API');
+
+        // Start heartbeat: ping every 30 seconds to keep connection alive
+        heartbeatInterval = setInterval(() => {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.ping();
+            }
+            if (googleWs.readyState === WebSocket.OPEN) {
+                googleWs.ping();
+            }
+        }, 30000);
     });
 
     googleWs.on('close', (code, reason) => {
         console.log(`Google connection closed: ${code} - ${reason}`);
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
         ws.close(code, reason);
     });
 
     ws.on('close', () => {
         console.log('Client session ended. Terminating Google bridge.');
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
         googleWs.close();
     });
 
     googleWs.on('error', (err) => {
         console.error('Google WebSocket error:', err);
-        ws.send(JSON.stringify({ error: 'Upstream connection error' }));
+        ws.send(JSON.stringify({ error: 'Upstream connection error', code: 'UPSTREAM_ERROR' }));
     });
 
     ws.on('error', (err) => {
         console.error('Client WebSocket error:', err);
         googleWs.close();
+    });
+
+    // Handle pong responses (for connection health monitoring)
+    ws.on('pong', () => {
+        // Client is alive
     });
 });

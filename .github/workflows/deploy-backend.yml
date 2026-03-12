@@ -50,5 +50,10 @@ jobs:
             --region ${{ env.REGION }} \
             --allow-unauthenticated \
             --port 8080 \
+            --timeout=3600 \
+            --no-cpu-throttling \
+            --min-instances=1 \
+            --concurrency=200 \
+            --memory=512Mi \
             --set-env-vars="GOOGLE_CLOUD_PROJECT=${{ env.PROJECT_ID }}" \
             --set-secrets="GEMINI_API_KEY=GEMINI_API_KEY:latest"

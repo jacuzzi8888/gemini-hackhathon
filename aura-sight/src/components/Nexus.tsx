@@ -112,7 +112,7 @@ export const Nexus: React.FC<NexusProps> = ({
 
             {/* The Director Message */}
             {isEngaged && statusLabel && (
-                <div className="absolute top-16 px-10 text-center z-20 animate-in fade-in slide-in-from-top-4 duration-500">
+                <div role="status" aria-live="assertive" aria-atomic="true" className="absolute top-16 px-10 text-center z-20 animate-in fade-in slide-in-from-top-4 duration-500">
                     <h1 className="text-white text-2xl font-bold font-sans tracking-tight leading-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.5)] max-w-sm">
                         {statusLabel.length > 80 ? statusLabel.substring(0, 80) + '...' : statusLabel}
                     </h1>
@@ -199,7 +199,7 @@ export const Nexus: React.FC<NexusProps> = ({
 
             {/* Sub-label (Recording) */}
             {status === 'recording' && (
-                <div className="absolute bottom-32 text-center z-10 animate-in slide-in-from-bottom flex flex-col items-center gap-1">
+                <div role="status" aria-live="polite" className="absolute bottom-32 text-center z-10 animate-in slide-in-from-bottom flex flex-col items-center gap-1">
                     <span className="text-red-400 text-xs font-bold uppercase tracking-widest bg-red-500/10 px-3 py-1 rounded-full border border-red-400/30">
                         ● Recording
                     </span>
@@ -209,7 +209,7 @@ export const Nexus: React.FC<NexusProps> = ({
 
             {/* Sub-label (Thinking) */}
             {status === 'thinking' && (
-                <div className="absolute bottom-32 text-center z-10 animate-in slide-in-from-bottom flex flex-col items-center gap-1">
+                <div role="status" aria-live="polite" className="absolute bottom-32 text-center z-10 animate-in slide-in-from-bottom flex flex-col items-center gap-1">
                     <span className="text-amber-400 text-xs font-bold uppercase tracking-widest bg-amber-500/10 px-3 py-1 rounded-full border border-amber-400/30">
                         Analyzing
                     </span>
@@ -219,7 +219,7 @@ export const Nexus: React.FC<NexusProps> = ({
 
             {/* Sub-label (Responding) */}
             {status === 'responding' && (
-                <div className="absolute bottom-32 text-center z-10 animate-in slide-in-from-bottom flex flex-col items-center gap-1 w-3/4 max-w-sm">
+                <div role="status" aria-live="polite" className="absolute bottom-32 text-center z-10 animate-in slide-in-from-bottom flex flex-col items-center gap-1 w-3/4 max-w-sm">
                     <span className="text-aura-primary text-xs font-bold uppercase tracking-widest bg-aura-primary/10 px-3 py-1 rounded-full border border-aura-primary/30">
                         Aura Speaking
                     </span>

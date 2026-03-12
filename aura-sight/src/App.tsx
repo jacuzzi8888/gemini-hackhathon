@@ -15,7 +15,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'error'
+export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'error' | 'reconnecting'
 type ViewMode = 'nexus' | 'settings'
 
 function App() {
@@ -85,12 +85,39 @@ function App() {
         audioPlayer.current?.queueAudio(pcm16)
       })
 
-      // Handle unexpected disconnection
+      // Handle user interruption — immediately clear AI audio
+      apiClient.current!.onInterrupted(() => {
+        console.log('User interrupted — clearing audio queue')
+        audioPlayer.current?.clearQueue()
+        audioPlayer.current?.resume()
+      })
+
+      // Handle GoAway pre-termination warning
+      apiClient.current!.onGoAway((timeLeft) => {
+        console.warn(`Session ending in ${timeLeft}ms — will auto-reconnect`)
+        setDirectorMessage('Reconnecting...')
+      })
+
+      // Handle reconnection events
+      apiClient.current!.onReconnecting((attempt) => {
+        setStatus('reconnecting')
+        setDirectorMessage(`Reconnecting (${attempt})...`)
+      })
+
+      apiClient.current!.onReconnected(() => {
+        setStatus('idle')
+        setDirectorMessage('Reconnected')
+        playEarcon('success')
+        // Clear message after 2 seconds
+        setTimeout(() => setDirectorMessage(null), 2000)
+      })
+
+      // Handle unexpected disconnection (after all retries exhausted)
       apiClient.current!.onDisconnect((error) => {
         console.error('Aura session disconnected:', error)
         setStatus('error')
         playEarcon('error')
-        setDirectorMessage('Connection lost')
+        setDirectorMessage('Connection lost — tap to retry')
         stopHeartbeat()
         mediaManager.current?.stop()
       })
@@ -164,6 +191,7 @@ function App() {
     }
   }, [stopHeartbeat])
 
+  // ── Cleanup on unmount ──
   useEffect(() => {
     return () => {
       mediaManager.current?.stop()
@@ -171,6 +199,21 @@ function App() {
       if (captureInterval.current) clearInterval(captureInterval.current)
     }
   }, [stopHeartbeat])
+
+  // ── Handle mobile background/foreground lifecycle ──
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden' && status !== 'idle') {
+        // Pause capture when backgrounded to save resources
+        if (captureInterval.current) {
+          clearInterval(captureInterval.current)
+          captureInterval.current = null
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [status])
 
   // Determine active-like states for UI
   const isEngaged = status !== 'idle'
@@ -195,14 +238,16 @@ function App() {
                   status === 'recording' && "bg-red-500 shadow-[0_0_15px_#EF4444] animate-pulse",
                   status === 'thinking' && "bg-amber-400 shadow-[0_0_15px_#F59E0B] animate-pulse",
                   status === 'responding' && "bg-green-400 shadow-[0_0_15px_#4ADE80] animate-pulse",
+                  status === 'reconnecting' && "bg-amber-400 shadow-[0_0_15px_#F59E0B] animate-pulse",
                   status === 'error' && "bg-red-600",
                   status === 'idle' && "bg-white/30"
                 )} />
-                <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/80">
+                <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/80" role="status" aria-live="polite">
                   {status === 'idle' && 'Ready'}
                   {status === 'recording' && 'Recording'}
                   {status === 'thinking' && 'Thinking'}
                   {status === 'responding' && 'Speaking'}
+                  {status === 'reconnecting' && 'Reconnecting'}
                   {status === 'error' && 'Error'}
                 </span>
               </div>
@@ -246,6 +291,7 @@ function App() {
               {status === 'recording' && 'Recording...'}
               {status === 'thinking' && 'Thinking...'}
               {status === 'responding' && 'Aura Speaking'}
+              {status === 'reconnecting' && 'Reconnecting...'}
               {status === 'error' && 'Tap to Retry'}
             </span>
           </button>

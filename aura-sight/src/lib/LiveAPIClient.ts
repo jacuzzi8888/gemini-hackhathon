@@ -6,6 +6,13 @@ const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname =
 /**
  * LiveAPIClient handles the WebSocket connection to the Aura Proxy,
  * managing the bidirectional stream of audio/video to Gemini Multimodal Live API.
+ *
+ * Features (2026 standard):
+ * - Context window compression for unlimited session duration
+ * - Session resumption with transparent token management
+ * - GoAway pre-termination handling
+ * - Proper interruption signaling
+ * - Exponential backoff reconnection with jitter
  */
 export class LiveAPIClient {
     private ws: WebSocket | null = null;
@@ -13,7 +20,21 @@ export class LiveAPIClient {
     private onContentHandler: (text: string) => void = () => { };
     private onAudioHandler: (data: Int16Array) => void = () => { };
     private onDisconnectHandler: (reason: string) => void = () => { };
+    private onInterruptedHandler: () => void = () => { };
+    private onGoAwayHandler: (timeLeft: number) => void = () => { };
+    private onReconnectingHandler: (attempt: number) => void = () => { };
+    private onReconnectedHandler: () => void = () => { };
     private isConnected: boolean = false;
+
+    // Reconnection state
+    private reconnectAttempts: number = 0;
+    private readonly maxReconnectAttempts: number = 15;
+    private readonly baseDelay: number = 1000;
+    private readonly maxDelay: number = 30000;
+    private shouldReconnect: boolean = true;
+
+    // Session resumption
+    private resumptionToken: string | null = null;
 
     constructor(url?: string) {
         if (url) {
@@ -39,12 +60,25 @@ export class LiveAPIClient {
                 const sendSetup = () => {
                     if (this.ws?.readyState === WebSocket.OPEN) {
                         this.isConnected = true;
+                        this.reconnectAttempts = 0; // Reset on successful connection
+
                         // Initial Setup Message for Vertex AI (camelCase required)
-                        const setupMessage = {
+                        const setupMessage: any = {
                             setup: {
                                 model: "projects/ocellus-488718/locations/us-central1/publishers/google/models/gemini-live-2.5-flash-native-audio",
                                 generationConfig: {
                                     responseModalities: ["AUDIO"],
+                                },
+                                // Enable context window compression for unlimited session duration
+                                // Without this: audio-only = 15 min max, audio+video = 2 min max
+                                contextWindowCompression: {
+                                    slidingWindow: {},
+                                    triggerTokens: 25600,
+                                },
+                                // Enable session resumption for reconnection resilience
+                                sessionResumption: {
+                                    transparent: true,
+                                    ...(this.resumptionToken ? { handle: this.resumptionToken } : {}),
                                 },
                                 systemInstruction: {
                                     parts: [{
@@ -104,15 +138,54 @@ PROACTIVE BEHAVIORS:
             this.ws.onclose = (event) => {
                 console.log('LiveAPIClient: Disconnected from Aura Proxy', event.code, event.reason);
                 this.isConnected = false;
-                this.onDisconnectHandler(event.reason || `Code: ${event.code}`);
-                reject(new Error(`WebSocket closed: ${event.code} ${event.reason}`));
+
+                // Attempt auto-reconnect for non-intentional disconnections
+                if (this.shouldReconnect && event.code !== 1000) {
+                    this.attemptReconnect();
+                } else {
+                    this.onDisconnectHandler(event.reason || `Code: ${event.code}`);
+                }
             };
 
             this.ws.onerror = (err) => {
                 console.error('WebSocket Error:', err);
-                reject(err);
+                // Don't reject if we're reconnecting — onclose will handle it
+                if (this.reconnectAttempts === 0) {
+                    reject(err);
+                }
             };
         });
+    }
+
+    /**
+     * Attempts to reconnect with exponential backoff and jitter.
+     */
+    private async attemptReconnect() {
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error('LiveAPIClient: Max reconnection attempts reached');
+            this.onDisconnectHandler('Max reconnection attempts reached');
+            return;
+        }
+
+        const delay = Math.min(
+            this.maxDelay,
+            this.baseDelay * Math.pow(2, this.reconnectAttempts)
+        ) + Math.random() * this.baseDelay; // Jitter
+
+        this.reconnectAttempts++;
+        console.log(`LiveAPIClient: Reconnecting in ${Math.round(delay)}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+        this.onReconnectingHandler(this.reconnectAttempts);
+
+        await new Promise(r => setTimeout(r, delay));
+
+        try {
+            await this.connect();
+            console.log('LiveAPIClient: Reconnection successful');
+            this.onReconnectedHandler();
+        } catch (err) {
+            console.error('LiveAPIClient: Reconnection failed:', err);
+            // onclose will fire again and trigger another attemptReconnect
+        }
     }
 
     /**
@@ -125,9 +198,36 @@ PROACTIVE BEHAVIORS:
             return;
         }
 
+        // Handle GoAway — pre-termination warning
+        const goAway = message.goAway || message.go_away;
+        if (goAway) {
+            const timeLeft = goAway.timeLeft || goAway.time_left || 0;
+            console.warn('Gemini GoAway received. Time left:', timeLeft);
+            this.onGoAwayHandler(timeLeft);
+            return;
+        }
+
+        // Handle Session Resumption Token updates
+        const sessionUpdate = message.sessionResumptionUpdate || message.session_resumption_update;
+        if (sessionUpdate) {
+            const token = sessionUpdate.token || sessionUpdate.handle;
+            if (token) {
+                this.resumptionToken = token;
+                console.log('LiveAPIClient: Session resumption token updated');
+            }
+            return;
+        }
+
         // Handle Server Content (Resilient to casing)
         const serverContent = message.serverContent || message.server_content;
         if (serverContent) {
+            // Handle interruption — user started speaking while AI was responding
+            if (serverContent.interrupted) {
+                console.log('Gemini interrupted. Clearing local audio queue.');
+                this.onInterruptedHandler();
+                return;
+            }
+
             const modelTurn = serverContent.modelTurn || serverContent.model_turn;
             if (modelTurn && modelTurn.parts) {
                 for (const part of modelTurn.parts) {
@@ -135,7 +235,7 @@ PROACTIVE BEHAVIORS:
                         this.onContentHandler(part.text);
                     }
                     const inlineData = part.inlineData || part.inline_data;
-                    if (inlineData && (inlineData.mimeType === 'AUDIO' || inlineData.mimeType === 'audio/pcm;rate=16000' || inlineData.mime_type === 'AUDIO')) {
+                    if (inlineData && (inlineData.mimeType === 'AUDIO' || inlineData.mimeType === 'audio/pcm;rate=24000' || inlineData.mimeType === 'audio/pcm;rate=16000' || inlineData.mime_type === 'AUDIO')) {
                         // Convert base64 audio to Int16Array
                         const binaryString = atob(inlineData.data);
                         const len = binaryString.length;
@@ -148,11 +248,6 @@ PROACTIVE BEHAVIORS:
                     }
                 }
             }
-        }
-
-        // Handle Interruption (Resilient to casing)
-        if (message.interrupted) {
-            console.log('Gemini interrupted. Clearing local audio queue.');
         }
     }
 
@@ -218,32 +313,42 @@ PROACTIVE BEHAVIORS:
         console.log('LiveAPIClient: Sent turnComplete signal');
     }
 
-    /**
-     * Registers a callback for text content updates.
-     */
+    // ── Event Handler Registration ──
+
     onContent(handler: (text: string) => void) {
         this.onContentHandler = handler;
     }
 
-    /**
-     * Registers a callback for audio data updates.
-     */
     onAudio(handler: (data: Int16Array) => void) {
         this.onAudioHandler = handler;
     }
 
-    /**
-     * Registers a callback for unexpected disconnections.
-     */
     onDisconnect(handler: (reason: string) => void) {
         this.onDisconnectHandler = handler;
     }
 
+    onInterrupted(handler: () => void) {
+        this.onInterruptedHandler = handler;
+    }
+
+    onGoAway(handler: (timeLeft: number) => void) {
+        this.onGoAwayHandler = handler;
+    }
+
+    onReconnecting(handler: (attempt: number) => void) {
+        this.onReconnectingHandler = handler;
+    }
+
+    onReconnected(handler: () => void) {
+        this.onReconnectedHandler = handler;
+    }
+
     /**
-     * Disconnects the session.
+     * Disconnects the session intentionally (no auto-reconnect).
      */
     disconnect() {
-        this.ws?.close();
+        this.shouldReconnect = false;
+        this.ws?.close(1000, 'Client disconnect');
         this.isConnected = false;
     }
 }
