@@ -7,18 +7,23 @@ import { MediaManager } from './lib/MediaManager'
 import { AudioPlayer } from './lib/AudioPlayer'
 import { LiveAPIClient } from './lib/LiveAPIClient'
 import { unlockAudio, playEarcon } from './lib/Earcon'
+import { supabase } from './lib/supabase'
 
 import { Nexus } from './components/Nexus'
 import { SettingsPanel } from './components/SettingsPanel'
+import { Login } from './components/Login'
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
 export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'error' | 'reconnecting'
-type ViewMode = 'nexus' | 'settings'
+type ViewMode = 'nexus' | 'settings' | 'loading'
 
 function App() {
+  const [session, setSession] = useState<any>(null)
+  const [isLoadingSession, setIsLoadingSession] = useState(true)
+
   const [activeView, setActiveView] = useState<ViewMode>('nexus')
   const [status, setStatus] = useState<AuraStatus>('idle')
   const [directorMessage, setDirectorMessage] = useState<string | null>(null)
@@ -28,6 +33,22 @@ function App() {
   const apiClient = useRef<LiveAPIClient | null>(null)
   const captureInterval = useRef<number | null>(null)
   const heartbeatInterval = useRef<number | null>(null)
+
+  // ── Session Auto-Resume ──
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session)
+      setIsLoadingSession(false)
+    })
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   // ── Haptic Heartbeat ──
   const startHeartbeat = useCallback(() => {
@@ -133,7 +154,22 @@ function App() {
         mediaManager.current?.stop()
       })
 
-      await apiClient.current!.connect()
+      // Retrieve JWT from session storage to authenticate the WebSocket request
+      let token: string | undefined = undefined;
+      try {
+          const authKey = Object.keys(sessionStorage).find(k => k.startsWith('sb-') && k.endsWith('-auth-token'));
+          if (authKey) {
+              const sbDataStr = sessionStorage.getItem(authKey);
+              if (sbDataStr) {
+                  const sbData = JSON.parse(sbDataStr);
+                  token = sbData?.access_token;
+              }
+          }
+      } catch (e) {
+          console.warn('No active session token found.');
+      }
+
+      await apiClient.current!.connect(token)
 
       // IMPORTANT: Await audio capture setup — worklet must be loaded before user can release
       await mediaManager.current.startAudioCapture((pcm16) => {
@@ -228,6 +264,10 @@ function App() {
           clearInterval(captureInterval.current)
           captureInterval.current = null
         }
+        
+        // Explicitly warn the user about iOS PWA background constraints
+        playEarcon('error')
+        setDirectorMessage('Aura suspended in background. Keep app active.')
       }
     }
     document.addEventListener('visibilitychange', handleVisibility)
@@ -236,6 +276,19 @@ function App() {
 
   // Determine active-like states for UI
   const isEngaged = status !== 'idle'
+
+  // ── Session Render Branching ──
+  if (isLoadingSession) {
+    return (
+        <div className="flex h-[100dvh] w-full items-center justify-center bg-aura-dark text-aura-light">
+            <p className="text-3xl font-bold animate-pulse tracking-widest text-aura-cyan">AURA</p>
+        </div>
+    )
+  }
+
+  if (!session) {
+    return <Login />
+  }
 
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-aura-dark text-aura-light overflow-hidden relative">

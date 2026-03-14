@@ -26,3 +26,16 @@ The entire system utilizes a single typeface: **Inter** (sans-serif).
 * **Absolute Centering:** The core function block is perfectly centered in the viewport, surrounded by massive negative space to prevent accidental touches.
 * **Anchored Peripheries:** Secondary actions (Settings menu, tab bar) are solidly anchored to the extreme top and bottom of the screen (`px-10 pb-10 pt-4`).
 * **Tap Target Sizing:** Interactive areas rely on the padding of the layout, ensuring that the touch region is massive, even if the visual icon is standard size.
+
+## 6. Dynamic States & Interaction
+* **Idle**: The Nexus ring is a thin, static white translucent stroke. Pure silence.
+* **Recording**: The ring pulses with an Electric Cyan glow. Haptic heartbeats (40ms) provide tactile feedback.
+* **Thinking/Responding**: Status indicators update in the header. Media tracks are stopped immediately after the response finishes.
+* **Reconnecting**: Special state for network recovery. The UI shows a "Reconnecting (Attempt X)" message and waits for the session resumption handshake.
+
+## 7. Accessibility First
+* **Screen Reader Support**: All status changes are wrapped in semantic ARIA live regions (`role="status"`). 
+  - `assertive`: Used for critical Director guidance ("Tilt up").
+  - `polite`: Used for background state changes ("Thinking", "Reconnecting").
+* **Tactile Feedback**: Pulse haptics used sparingly to communicate the "listening" state to non-visual users.
+* **Isolated Privacy**: The "Push-to-Talk Perimeter" ensures the camera and mic are completely offline and disconnected when the app is idle.

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { supabase } from '../lib/supabase';
 
 export function cn(...inputs: ClassValue[]) {
     return twMerge(clsx(inputs));
@@ -85,6 +86,15 @@ export const SettingsPanel: React.FC<SettingsPanelProps> = ({ className = '', on
                     description="More detailed descriptions"
                     initialChecked={false}
                 />
+            </div>
+            
+            <div className="mt-auto pt-12 pb-8">
+                <button 
+                    onClick={() => supabase.auth.signOut()}
+                    className="w-full py-6 rounded-2xl border-2 border-red-500/50 text-red-400 font-bold text-2xl tracking-widest uppercase hover:bg-red-500 hover:text-white transition-colors"
+                >
+                    Sign Out
+                </button>
             </div>
         </div>
     );

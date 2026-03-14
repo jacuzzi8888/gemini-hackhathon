@@ -13,7 +13,10 @@ const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname =
  * - GoAway pre-termination handling
  * - Proper interruption signaling
  * - Exponential backoff reconnection with jitter
+ * - Function Calling (Supabase AI Memory)
  */
+import { supabase } from './supabase';
+
 export class LiveAPIClient {
     private ws: WebSocket | null = null;
     private readonly url: string;
@@ -49,11 +52,15 @@ export class LiveAPIClient {
 
     /**
      * Connects to the proxy and initializes the Gemini session.
+     * @param jwtToken - Optional Supabase JWT for secure backend proxy authentication.
      */
-    async connect() {
+    async connect(jwtToken?: string) {
         console.log("LiveAPIClient: Connecting to", this.url);
         return new Promise<void>((resolve, reject) => {
-            this.ws = new WebSocket(this.url);
+            // Pass the JWT via the standard WebSocket sub-protocols header.
+            // This is the only secure way to pass headers in browser WebSockets.
+            const protocols = jwtToken ? ['jwt', jwtToken] : undefined;
+            this.ws = new WebSocket(this.url, protocols);
 
             this.ws.onopen = () => {
                 console.log('LiveAPIClient: Connected to Aura Proxy');
@@ -107,9 +114,34 @@ PRIORITY ORDER (NEVER violate):
 
 PROACTIVE BEHAVIORS:
 - If you detect a hazard the user hasn't asked about, interrupt immediately: "Careful—there's a step down right in front of you."
-- If the image is blurry, say: "Hold steady for a moment."`
+- If the image is blurry, say: "Hold steady for a moment."
+- If the user shares a new preference or important fact (e.g., "I'm allergic to peanuts", "I prefer concise answers"), you MUST use the save_memory tool to record it.`
                                     }]
-                                }
+                                },
+                                tools: [
+                                    {
+                                        functionDeclarations: [
+                                            {
+                                                name: "save_memory",
+                                                description: "Saves an important user preference, fact, or hazard to their long-term AI memory profile in the database.",
+                                                parameters: {
+                                                    type: "OBJECT",
+                                                    properties: {
+                                                        memory_type: {
+                                                            type: "STRING",
+                                                            description: "The category of the memory: 'preference' (e.g., speech speed), 'fact' (e.g., user's name), or 'hazard' (e.g., allergies, phobias)."
+                                                        },
+                                                        content: {
+                                                            type: "STRING",
+                                                            description: "The concise core fact to remember (e.g., 'Allergic to peanuts', 'Prefers short answers')."
+                                                        }
+                                                    },
+                                                    required: ["memory_type", "content"]
+                                                }
+                                            }
+                                        ]
+                                    }
+                                ]
                             }
                         };
                         this.ws.send(JSON.stringify(setupMessage));
@@ -182,7 +214,20 @@ PROACTIVE BEHAVIORS:
         await new Promise(r => setTimeout(r, delay));
 
         try {
-            await this.connect();
+            // Retrieve JWT from session storage directly (or however the auth layer persists it)
+            // For now, look for a standard Supabase token
+            let token: string | undefined = undefined;
+            try {
+                const sbDataStr = Object.entries(sessionStorage).find(([k]) => k.startsWith('sb-') && k.endsWith('-auth-token'))?.[1];
+                if (sbDataStr) {
+                    const sbData = JSON.parse(sbDataStr);
+                    token = sbData?.access_token;
+                }
+            } catch (e) {
+                console.warn('Could not extract session token for reconnect');
+            }
+
+            await this.connect(token);
             console.log('LiveAPIClient: Reconnection successful');
             this.onReconnectedHandler();
         } catch (err) {
@@ -234,6 +279,36 @@ PROACTIVE BEHAVIORS:
             const modelTurn = serverContent.modelTurn || serverContent.model_turn;
             if (modelTurn && modelTurn.parts) {
                 for (const part of modelTurn.parts) {
+                    // Handle Tool/Function Calls (Phase 5 - AI Memory Writes)
+                    const functionCall = part.functionCall || part.function_call;
+                    if (functionCall && functionCall.name === "save_memory") {
+                        console.log('Gemini requested memory save:', functionCall.args);
+                        
+                        try {
+                            const { data: { user } } = await supabase.auth.getUser();
+                            if (user) {
+                                const { error } = await supabase
+                                    .from('ai_memory')
+                                    .insert({
+                                        user_id: user.id,
+                                        memory_type: functionCall.args.memory_type,
+                                        content: functionCall.args.content
+                                    });
+
+                                if (error) throw error;
+                                console.log('Successfully saved to Supabase ai_memory');
+                                
+                                // Send successful resolution back to Gemini
+                                this.sendToolResponse(functionCall.name, functionCall.id || "0", { status: "success" });
+                            } else {
+                                this.sendToolResponse(functionCall.name, functionCall.id || "0", { status: "error", message: "User not authenticated" });
+                            }
+                        } catch (err: any) {
+                            console.error('Failed to save memory to Supabase:', err);
+                            this.sendToolResponse(functionCall.name, functionCall.id || "0", { status: "error", message: err.message });
+                        }
+                    }
+
                     if (part.text) {
                         this.onContentHandler(part.text);
                     }
@@ -325,6 +400,28 @@ PROACTIVE BEHAVIORS:
         console.log('[DEBUG] Sending turnComplete:', JSON.stringify(message));
         this.ws.send(JSON.stringify(message));
         console.log('LiveAPIClient: Sent turnComplete signal');
+    }
+
+    /**
+     * Sends a function execution response back to Gemini to complete a tool call loop.
+     */
+    private sendToolResponse(name: string, id: string, response: object) {
+        if (!this.isConnected || !this.ws) return;
+        
+        const message = {
+            toolResponse: {
+                functionResponses: [
+                    {
+                        name,
+                        id,
+                        response
+                    }
+                ]
+            }
+        };
+        
+        console.log('[DEBUG] Sending toolResponse:', JSON.stringify(message));
+        this.ws.send(JSON.stringify(message));
     }
 
     // ── Event Handler Registration ──
