@@ -129,10 +129,19 @@ function App() {
 
       apiClient.current!.onTurnComplete(() => {
         if (isHandsFreeRef.current) {
-          updateStatus('recording')
-          setDirectorMessage('Watching...')
-          startHeartbeat()
-          return
+          updateStatus('recording');
+          setDirectorMessage('Watching...');
+          startHeartbeat();
+          // Ensure capture interval is running
+          if (!captureInterval.current) {
+            captureInterval.current = window.setInterval(() => {
+              const frame = mediaManager.current?.captureFrame();
+              if (frame && apiClient.current) {
+                apiClient.current.sendVideoFrame(frame);
+              }
+            }, 1000);
+          }
+          return;
         }
         updateStatus('idle')
         setDirectorMessage(null)
@@ -144,15 +153,21 @@ function App() {
       })
 
       apiClient.current!.onHandsFreeToggle((enabled) => {
-        setIsHandsFree(enabled)
-        isHandsFreeRef.current = enabled
+        setIsHandsFree(enabled);
+        isHandsFreeRef.current = enabled;
         if (enabled) {
-          playEarcon('success')
-          setDirectorMessage('Hands-free active')
+          playEarcon('success');
+          setDirectorMessage('Hands-free active');
+          // VAD is enabled in setup, so AI will respond automatically from now on
         } else {
-          setDirectorMessage('Hands-free off')
+          setDirectorMessage('Hands-free off');
+          playEarcon('stop');
+          // If we're not currently recording/responding, cleanup
+          if (statusRef.current === 'idle') {
+            cancelSession();
+          }
         }
-      })
+      });
 
       apiClient.current!.onDisconnect(() => {
         // Only show error if we were actually in an active session
@@ -201,7 +216,7 @@ function App() {
   }, [startHeartbeat, stopHeartbeat, cameraEnabled])
 
   const stopRecording = useCallback(() => {
-    if (captureInterval.current) {
+    if (captureInterval.current && !isHandsFreeRef.current) {
       clearInterval(captureInterval.current)
       captureInterval.current = null
     }

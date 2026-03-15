@@ -39,8 +39,8 @@ export const Nexus: React.FC<NexusProps> = ({
     const isEngaged = status !== 'idle';
 
     const startPress = () => {
-        // If in responding/thinking/error state, tap to cancel
-        if (status === 'responding' || status === 'thinking' || status === 'error') {
+        // If in responding/thinking/error/hands-free state, tap to cancel
+        if (status === 'responding' || status === 'thinking' || status === 'error' || isHandsFree) {
             onCancel();
             return;
         }
@@ -178,14 +178,19 @@ export const Nexus: React.FC<NexusProps> = ({
                     } : undefined}
                 >
                     {/* Live Camera Feed (Masked by rounded-full on parent) */}
-                    {(status === 'recording' || status === 'responding') && videoStream && cameraEnabled && (
-                        <video
-                            ref={videoRef}
-                            autoPlay
-                            playsInline
-                            muted
-                            className="absolute inset-0 w-full h-full object-cover opacity-60 mix-blend-screen pointer-events-none"
-                        />
+                    {(status === 'recording' || status === 'responding' || isHandsFree) && videoStream && cameraEnabled && (
+                        <div className={cn(
+                            "absolute inset-0 w-full h-full transition-opacity duration-300",
+                            isHandsFree && status === 'idle' ? "opacity-40 animate-pulse" : "opacity-60"
+                        )}>
+                            <video
+                                ref={videoRef}
+                                autoPlay
+                                playsInline
+                                muted
+                                className="w-full h-full object-cover mix-blend-screen pointer-events-none"
+                            />
+                        </div>
                     )}
 
                     {/* Voice Waveform (Recording / Responding) */}

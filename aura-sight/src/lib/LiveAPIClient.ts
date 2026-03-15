@@ -78,6 +78,11 @@ export class LiveAPIClient {
                                 generationConfig: {
                                     responseModalities: ["AUDIO"],
                                 },
+                                voiceActivityDetection: {
+                                    voiceActivityFilter: {
+                                        speechThreshold: 0.3,
+                                    }
+                                },
                                 // Enable context window compression for unlimited session duration
                                 // Without this: audio-only = 15 min max, audio+video = 2 min max
                                 contextWindowCompression: {
@@ -117,7 +122,7 @@ PROACTIVE BEHAVIORS:
 - If you detect a hazard the user hasn't asked about, interrupt immediately: "Careful—there's a step down right in front of you."
 - If the image is blurry, say: "Hold steady for a moment."
 - If the user shares a new preference or important fact (e.g., "I'm allergic to peanuts", "I prefer concise answers"), you MUST use the save_memory tool to record it.
-- HANDS-FREE & GUIDANCE: If the user says 'watch this' or 'be my eyes', call toggle_hands_free(enabled: true). When active, keep monitoring and responding until the user says 'stop' or 'thank you'. In 'eyes' mode, be descriptive about spatial obstacles.`
+- PROACTIVE MONITORING: When hands-free is enabled via 'toggle_hands_free(enabled: true)', stay alert. You are an extra set of eyes. If the user stops an activity (like dancing) or asks a question, respond immediately using your visual context. In 'eyes' mode, provide vivid, directional descriptions of their environment.`
                                     }]
                                 },
                                 tools: [
