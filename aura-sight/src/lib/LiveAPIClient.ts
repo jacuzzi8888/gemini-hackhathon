@@ -26,9 +26,10 @@ export class LiveAPIClient {
     private onInterruptedHandler: () => void = () => { };
     private onGoAwayHandler: (timeLeft: number) => void = () => { };
     private onTurnCompleteHandler: () => void = () => { };
+    private onHandsFreeToggleHandler: (enabled: boolean) => void = () => { };
     private onReconnectingHandler: (attempt: number) => void = () => { };
     private onReconnectedHandler: () => void = () => { };
-    private isConnected: boolean = false;
+    public isConnected: boolean = false;
 
     // Reconnection state
     private reconnectAttempts: number = 0;
@@ -115,7 +116,8 @@ PRIORITY ORDER (NEVER violate):
 PROACTIVE BEHAVIORS:
 - If you detect a hazard the user hasn't asked about, interrupt immediately: "Careful—there's a step down right in front of you."
 - If the image is blurry, say: "Hold steady for a moment."
-- If the user shares a new preference or important fact (e.g., "I'm allergic to peanuts", "I prefer concise answers"), you MUST use the save_memory tool to record it.`
+- If the user shares a new preference or important fact (e.g., "I'm allergic to peanuts", "I prefer concise answers"), you MUST use the save_memory tool to record it.
+- HANDS-FREE & GUIDANCE: If the user says 'watch this' or 'be my eyes', call toggle_hands_free(enabled: true). When active, keep monitoring and responding until the user says 'stop' or 'thank you'. In 'eyes' mode, be descriptive about spatial obstacles.`
                                     }]
                                 },
                                 tools: [
@@ -151,6 +153,20 @@ PROACTIVE BEHAVIORS:
                                                         }
                                                     },
                                                     required: ["preference", "value"]
+                                                }
+                                            },
+                                            {
+                                                name: "toggle_hands_free",
+                                                description: "Locks or unlocks the AI into persistent hands-free monitoring mode. Use this when the user says 'Aura, watch this' or 'Stop watching'.",
+                                                parameters: {
+                                                    type: "object",
+                                                    properties: {
+                                                        enabled: {
+                                                            type: "boolean",
+                                                            description: "Set to true to start persistent monitoring, false to stop."
+                                                        }
+                                                    },
+                                                    required: ["enabled"]
                                                 }
                                             },
                                             {
@@ -347,6 +363,10 @@ PROACTIVE BEHAVIORS:
                                     category: 'fact'
                                 });
                                 this.sendToolResponse(name, callId, { result: 'Fact saved.' });
+                            } else if (name === 'toggle_hands_free') {
+                                const { enabled } = args;
+                                this.onHandsFreeToggleHandler(enabled);
+                                this.sendToolResponse(name, callId, { result: `Hands-free mode ${enabled ? 'enabled' : 'disabled'}.` });
                             }
                         } catch (err: any) {
                             console.error(`Tool execution failed (${name}):`, err);
@@ -493,6 +513,10 @@ PROACTIVE BEHAVIORS:
 
     onTurnComplete(handler: () => void) {
         this.onTurnCompleteHandler = handler;
+    }
+
+    onHandsFreeToggle(handler: (enabled: boolean) => void) {
+        this.onHandsFreeToggleHandler = handler;
     }
 
     onReconnecting(handler: (attempt: number) => void) {

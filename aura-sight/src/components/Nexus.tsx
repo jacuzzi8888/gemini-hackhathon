@@ -15,6 +15,7 @@ export interface NexusProps {
     readonly onCancel: () => void;
     readonly videoStream?: MediaStream | null;
     readonly cameraEnabled?: boolean;
+    readonly isHandsFree?: boolean;
     readonly className?: string;
 }
 
@@ -26,6 +27,7 @@ export const Nexus: React.FC<NexusProps> = ({
     onCancel,
     videoStream,
     cameraEnabled = true,
+    isHandsFree = false,
     className = '',
 }) => {
     const videoRef = useRef<HTMLVideoElement>(null);
@@ -167,7 +169,8 @@ export const Nexus: React.FC<NexusProps> = ({
                         status === 'recording' && "bg-red-500/80 scale-100 border-none shadow-[0_0_80px_rgba(239,68,68,0.5)] animate-pulse",
                         status === 'thinking' && "scale-100 border-none shadow-[0_0_60px_rgba(245,158,11,0.4)]",
                         status === 'responding' && "bg-aura-primary scale-100 border-none shadow-[0_0_80px_rgba(19,127,236,0.6)]",
-                        status === 'error' && "bg-red-800/60 scale-100 border-none shadow-[0_0_40px_rgba(239,68,68,0.3)]"
+                        status === 'error' && "bg-red-800/60 scale-100 border-none shadow-[0_0_40px_rgba(239,68,68,0.3)]",
+                        isHandsFree && status === 'idle' && "bg-aura-cyan/40 scale-100 border-2 border-aura-cyan shadow-[0_0_60px_rgba(19,127,236,0.4)] animate-pulse"
                     )}
                     style={status === 'thinking' ? {
                         background: 'conic-gradient(from 0deg, #F59E0B, #8B5CF6, #3B82F6, #F59E0B)',
@@ -217,8 +220,12 @@ export const Nexus: React.FC<NexusProps> = ({
             {/* Instructions (Idle) */}
             {status === 'idle' && (
                 <div className={cn("absolute bottom-32 text-center z-10 transition-opacity duration-300", isPressing ? "opacity-0" : "opacity-100")}>
-                    <p className="text-white text-xl font-medium tracking-tight opacity-90 px-8">Hold to talk to Aura</p>
-                    <p className="text-slate-300 text-[10px] font-bold tracking-[0.3em] uppercase mt-3 opacity-60">Aura Sentinel • Active</p>
+                    <p className="text-white text-xl font-medium tracking-tight opacity-90 px-8">
+                        {isHandsFree ? 'Hands-Free Monitoring' : 'Hold to talk to Aura'}
+                    </p>
+                    <p className="text-slate-300 text-[10px] font-bold tracking-[0.3em] uppercase mt-3 opacity-60">
+                        {isHandsFree ? 'Tap to Exit' : 'Aura Sentinel • Active'}
+                    </p>
                 </div>
             )}
 

@@ -31,6 +31,8 @@ function App() {
   const [cameraEnabled, setCameraEnabled] = useState<boolean>(true)
   const [cameras, setCameras] = useState<{ id: string; label: string }[]>([])
   const [currentCameraIndex, setCurrentCameraIndex] = useState(0)
+  const [isHandsFree, setIsHandsFree] = useState<boolean>(false)
+  const isHandsFreeRef = useRef<boolean>(false)
 
   const mediaManager = useRef<MediaManager | null>(null)
   const audioPlayer = useRef<AudioPlayer | null>(null)
@@ -119,12 +121,30 @@ function App() {
       })
 
       apiClient.current!.onTurnComplete(() => {
+        if (isHandsFreeRef.current) {
+          setStatus('recording')
+          setDirectorMessage('Watching...')
+          startHeartbeat()
+          return
+        }
         setStatus('idle')
         setDirectorMessage(null)
         stopHeartbeat()
         mediaManager.current?.stop()
         setVideoStream(null)
-        apiClient.current?.disconnect()
+        // Keep the connection alive for the next interaction
+        // apiClient.current?.disconnect()
+      })
+
+      apiClient.current!.onHandsFreeToggle((enabled) => {
+        setIsHandsFree(enabled)
+        isHandsFreeRef.current = enabled
+        if (enabled) {
+          playEarcon('success')
+          setDirectorMessage('Hands-free active')
+        } else {
+          setDirectorMessage('Hands-free off')
+        }
       })
 
       apiClient.current!.onDisconnect(() => {
@@ -144,7 +164,10 @@ function App() {
         token = sbData?.access_token;
       }
 
-      await apiClient.current!.connect(token)
+      // Re-use connection if already active
+      if (!apiClient.current!.isConnected) {
+        await apiClient.current!.connect(token)
+      }
 
       await mediaManager.current.startAudioCapture((pcm16) => {
         apiClient.current?.sendAudioChunk(pcm16)
@@ -188,6 +211,8 @@ function App() {
   const cancelSession = useCallback(() => {
     setStatus('idle')
     setDirectorMessage(null)
+    setIsHandsFree(false)
+    isHandsFreeRef.current = false
     stopHeartbeat()
     mediaManager.current?.stop()
     setVideoStream(null)
@@ -290,6 +315,7 @@ function App() {
               onCancel={cancelSession}
               videoStream={videoStream}
               cameraEnabled={cameraEnabled}
+              isHandsFree={isHandsFree}
             />
           </>
         ) : (
