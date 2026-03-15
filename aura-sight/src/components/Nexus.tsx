@@ -113,6 +113,7 @@ export const Nexus: React.FC<NexusProps> = ({
         switch (status) {
             case 'recording': return 'Listening...';
             case 'thinking': return 'Processing...';
+            case 'watching': return 'Watching...';
             case 'responding': return directorMessage || 'Speaking...';
             case 'error': return directorMessage || 'Error';
             default: return null;
@@ -170,6 +171,7 @@ export const Nexus: React.FC<NexusProps> = ({
                         status === 'thinking' && "scale-100 border-none shadow-[0_0_60px_rgba(245,158,11,0.4)]",
                         status === 'responding' && "bg-aura-primary scale-100 border-none shadow-[0_0_80px_rgba(19,127,236,0.6)]",
                         status === 'listening' && "bg-aura-amber scale-100 border-none shadow-[0_0_80px_rgba(245,158,11,0.6)] animate-pulse",
+                        status === 'watching' && "bg-aura-dark scale-100 border-2 border-aura-cyan shadow-[0_0_80px_rgba(19,127,236,0.6)]",
                         status === 'error' && "bg-red-800/60 scale-100 border-none shadow-[0_0_40px_rgba(239,68,68,0.3)]",
                         isHandsFree && status === 'idle' && "bg-aura-cyan/40 scale-100 border-2 border-aura-cyan shadow-[0_0_60px_rgba(19,127,236,0.4)] animate-pulse"
                     )}
@@ -179,10 +181,10 @@ export const Nexus: React.FC<NexusProps> = ({
                     } : undefined}
                 >
                     {/* Live Camera Feed (Masked by rounded-full on parent) */}
-                    {(status === 'recording' || status === 'responding' || isHandsFree) && videoStream && cameraEnabled && (
+                    {(status === 'recording' || status === 'responding' || status === 'watching' || isHandsFree) && videoStream && cameraEnabled && (
                         <div className={cn(
                             "absolute inset-0 w-full h-full transition-all duration-700",
-                            isHandsFree && status === 'idle' ? "opacity-80 scale-110 blur-[1px]" : "opacity-60"
+                            (status === 'watching' || isHandsFree && status === 'idle') ? "opacity-100 scale-100" : "opacity-60"
                         )}>
                             <video
                                 ref={videoRef}
@@ -191,12 +193,21 @@ export const Nexus: React.FC<NexusProps> = ({
                                 muted
                                 className={cn(
                                     "w-full h-full object-cover pointer-events-none transition-filter duration-700",
-                                    isHandsFree && status === 'idle' ? "grayscale-[0.3] contrast-125 saturate-150" : "mix-blend-screen"
+                                    status === 'watching' ? "grayscale-0 contrast-100 saturate-100" : 
+                                    (isHandsFree && status === 'idle' ? "grayscale-[0.3] contrast-125 saturate-150 blur-[2px]" : "mix-blend-screen")
                                 )}
                             />
                             {/* Scanning Line overlay for Hands-Free */}
-                            {isHandsFree && status === 'idle' && (
+                            {(status === 'watching' || (isHandsFree && status === 'idle')) && (
                                 <div className="absolute inset-0 bg-gradient-to-b from-transparent via-aura-cyan/20 to-transparent h-1/2 w-full animate-scan pointer-events-none" />
+                            )}
+                            
+                            {/* RED DOT: Active Listening Indicator (New 2026 Standard) */}
+                            {(status === 'recording' || status === 'listening' || status === 'watching') && (
+                                <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/40 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10 z-50">
+                                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
+                                    <span className="text-[8px] font-bold text-white uppercase tracking-tighter">LIVE</span>
+                                </div>
                             )}
                         </div>
                     )}

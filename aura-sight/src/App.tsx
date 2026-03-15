@@ -19,7 +19,7 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'listening' | 'error' | 'reconnecting'
+export type AuraStatus = 'idle' | 'recording' | 'thinking' | 'responding' | 'listening' | 'watching' | 'error' | 'reconnecting'
 type ViewMode = 'nexus' | 'settings' | 'loading'
 
 function App() {
@@ -164,10 +164,13 @@ function App() {
 
       apiClient.current!.onTurnComplete(async () => {
         if (isHandsFreeRef.current) {
-          updateStatus('recording');
+          updateStatus('watching');
           setDirectorMessage('Watching...');
           startHeartbeat();
           
+          // Force clear any privacy masks to ensure feed is clear (except for persons)
+          mediaManager.current?.setPrivacyMasks([]);
+
           // RESTART AUDIO CAPTURE FOR VAD
           try {
             await mediaManager.current?.startAudioCapture((pcm16) => {
@@ -239,7 +242,7 @@ function App() {
       });
 
       apiClient.current!.onTranscription((transcript) => {
-        if (statusRef.current === 'recording' || statusRef.current === 'listening') {
+        if (statusRef.current === 'recording' || statusRef.current === 'listening' || statusRef.current === 'watching') {
           setDirectorMessage(`"${transcript}"`);
 
           const lowerTranscript = transcript.toLowerCase();
@@ -249,9 +252,9 @@ function App() {
             if (!isHandsFreeRef.current) {
               setIsHandsFree(true);
               isHandsFreeRef.current = true;
+              updateStatus('watching'); // Explicitly transition to watching
               playEarcon('success');
               setDirectorMessage('Initiating Watch Mode...');
-              // The AI will also respond with "Now watching" or similar based on instructions
             }
           }
 
