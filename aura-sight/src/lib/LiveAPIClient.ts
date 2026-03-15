@@ -122,21 +122,49 @@ PROACTIVE BEHAVIORS:
                                     {
                                         functionDeclarations: [
                                             {
-                                                name: "save_memory",
-                                                description: "Saves an important user preference, fact, or hazard to their long-term AI memory profile in the database.",
+                                                name: "add_allergy",
+                                                description: "Adds a new allergy to the user's profile.",
                                                 parameters: {
-                                                    type: "OBJECT",
+                                                    type: "object",
                                                     properties: {
-                                                        memory_type: {
-                                                            type: "STRING",
-                                                            description: "The category of the memory: 'preference' (e.g., speech speed), 'fact' (e.g., user's name), or 'hazard' (e.g., allergies, phobias)."
-                                                        },
-                                                        content: {
-                                                            type: "STRING",
-                                                            description: "The concise core fact to remember (e.g., 'Allergic to peanuts', 'Prefers short answers')."
+                                                        allergy: {
+                                                            type: "string",
+                                                            description: "The name of the allergy to add."
                                                         }
                                                     },
-                                                    required: ["memory_type", "content"]
+                                                    required: ["allergy"]
+                                                }
+                                            },
+                                            {
+                                                name: "update_accessible_preference",
+                                                description: "Updates a user's accessibility preference.",
+                                                parameters: {
+                                                    type: "object",
+                                                    properties: {
+                                                        preference: {
+                                                            type: "string",
+                                                            description: "The name of the preference to update (e.g., 'concise_answers', 'verbose_descriptions')."
+                                                        },
+                                                        value: {
+                                                            type: "boolean",
+                                                            description: "The new value for the preference (true or false)."
+                                                        }
+                                                    },
+                                                    required: ["preference", "value"]
+                                                }
+                                            },
+                                            {
+                                                name: "save_fact",
+                                                description: "Saves a general fact or important information about the user.",
+                                                parameters: {
+                                                    type: "object",
+                                                    properties: {
+                                                        fact: {
+                                                            type: "string",
+                                                            description: "The fact or information to save."
+                                                        }
+                                                    },
+                                                    required: ["fact"]
                                                 }
                                             }
                                         ]
@@ -281,31 +309,48 @@ PROACTIVE BEHAVIORS:
                 for (const part of modelTurn.parts) {
                     // Handle Tool/Function Calls (Phase 5 - AI Memory Writes)
                     const functionCall = part.functionCall || part.function_call;
-                    if (functionCall && functionCall.name === "save_memory") {
-                        console.log('Gemini requested memory save:', functionCall.args);
+                    if (functionCall) {
+                        const name = functionCall.name;
+                        const args = functionCall.args;
+                        const callId = functionCall.id || "0";
+
+                        console.log(`Gemini requested tool: ${name}`, args);
                         
                         try {
                             const { data: { user } } = await supabase.auth.getUser();
-                            if (user) {
-                                const { error } = await supabase
-                                    .from('ai_memory')
-                                    .insert({
-                                        user_id: user.id,
-                                        memory_type: functionCall.args.memory_type,
-                                        content: functionCall.args.content
-                                    });
+                            if (!user) throw new Error("User not authenticated");
 
-                                if (error) throw error;
-                                console.log('Successfully saved to Supabase ai_memory');
-                                
-                                // Send successful resolution back to Gemini
-                                this.sendToolResponse(functionCall.name, functionCall.id || "0", { status: "success" });
-                            } else {
-                                this.sendToolResponse(functionCall.name, functionCall.id || "0", { status: "error", message: "User not authenticated" });
+                            if (name === 'add_allergy') {
+                                const { allergy } = args;
+                                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Recording allergy: ${allergy}`));
+                                await supabase.from('ai_memory').insert({ 
+                                    user_id: user.id,
+                                    content: `Allergy: ${allergy}`,
+                                    category: 'allergy'
+                                });
+                                this.sendToolResponse(name, callId, { result: 'Allergy saved.' });
+                            } else if (name === 'update_accessible_preference') {
+                                const { preference, value } = args;
+                                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Updating preference to ${value}`));
+                                await supabase.from('accessibility_preferences').upsert({
+                                    user_id: user.id,
+                                    [preference]: value,
+                                    updated_at: new Date().toISOString()
+                                });
+                                this.sendToolResponse(name, callId, { result: 'Preference updated.' });
+                            } else if (name === 'save_fact') {
+                                const { fact } = args;
+                                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Remembering that ${fact}`));
+                                await supabase.from('ai_memory').insert({ 
+                                    user_id: user.id,
+                                    content: fact,
+                                    category: 'fact'
+                                });
+                                this.sendToolResponse(name, callId, { result: 'Fact saved.' });
                             }
                         } catch (err: any) {
-                            console.error('Failed to save memory to Supabase:', err);
-                            this.sendToolResponse(functionCall.name, functionCall.id || "0", { status: "error", message: err.message });
+                            console.error(`Tool execution failed (${name}):`, err);
+                            this.sendToolResponse(name, callId, { status: "error", message: err.message });
                         }
                     }
 
