@@ -1,4 +1,5 @@
-import { ObjectDetector, FilesetResolver, Detection } from "@mediapipe/tasks-vision";
+import { ObjectDetector, FilesetResolver } from "@mediapipe/tasks-vision";
+import type { Detection } from "@mediapipe/tasks-vision";
 
 export interface HazardEvent {
     label: string;

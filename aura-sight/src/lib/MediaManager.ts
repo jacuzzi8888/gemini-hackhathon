@@ -200,4 +200,8 @@ export class MediaManager {
     getStream() {
         return this.stream;
     }
+
+    getVideoElement() {
+        return this.videoElement;
+    }
 }
