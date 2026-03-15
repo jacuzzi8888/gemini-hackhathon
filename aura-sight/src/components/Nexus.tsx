@@ -103,24 +103,27 @@ export const Nexus: React.FC<NexusProps> = ({
     useEffect(() => {
         const bindStream = () => {
             if (videoRef.current && videoStream) {
-                // Only set if different to avoid flickering, but ensure it's playing
                 if (videoRef.current.srcObject !== videoStream) {
                     videoRef.current.srcObject = videoStream;
                 }
                 
-                // Force play if paused (happens during state changes)
-                if (videoRef.current.paused) {
-                    videoRef.current.play().catch(e => console.warn("Auto-play failed:", e));
-                }
+                // 2026 Standard: Aggressive Jumpstart
+                const jumpstart = () => {
+                   if (videoRef.current && videoRef.current.paused) {
+                       videoRef.current.play().catch(e => console.warn("Jumpstart failed:", e));
+                   }
+                };
+                
+                requestAnimationFrame(jumpstart);
+                setTimeout(jumpstart, 50); // Fallback for low-power NPUs
             } else if (videoRef.current) {
                 videoRef.current.srcObject = null;
             }
         };
         bindStream();
         
-        // Robust re-bind for state changes (e.g., responding -> watching)
         const timer = setTimeout(bindStream, 150);
-        const secondTimer = setTimeout(bindStream, 500); // Guard for slow renders
+        const secondTimer = setTimeout(bindStream, 500);
         return () => {
             clearTimeout(timer);
             clearTimeout(secondTimer);

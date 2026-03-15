@@ -176,13 +176,15 @@ function App() {
           // This allows session resumption / token update to stabilize
           setTimeout(async () => {
             try {
-              await mediaManager.current?.startAudioCapture((pcm16) => {
-                apiClient.current?.sendAudioChunk(pcm16);
-              });
+              if (statusRef.current === 'watching') {
+                await mediaManager.current?.startAudioCapture((pcm16) => {
+                  apiClient.current?.sendAudioChunk(pcm16);
+                });
+              }
             } catch (err) {
               console.error("Failed to restart audio capture in hands-free mode:", err);
             }
-          }, 300);
+          }, 1000); // 2026 Standard: 1s for hardware stabilization
 
           // Ensure capture interval is running
           if (!captureInterval.current) {
@@ -280,6 +282,21 @@ function App() {
         mediaManager.current?.stop()
         setVideoStream(null)
       })
+
+      apiClient.current!.onReconnecting((attempt) => {
+        updateStatus('reconnecting');
+        setDirectorMessage(`Reconnecting (Attempt ${attempt})...`);
+      });
+
+      apiClient.current!.onReconnected(() => {
+        if (isHandsFreeRef.current) {
+          updateStatus('watching');
+          setDirectorMessage('Watching...');
+        } else {
+          updateStatus('idle');
+          setDirectorMessage(null);
+        }
+      });
 
       // Get JWT for auth
       let token: string | undefined = undefined;

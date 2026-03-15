@@ -31,6 +31,8 @@ export class LiveAPIClient {
     private onReconnectingHandler: (attempt: number) => void = () => { };
     private onReconnectedHandler: () => void = () => { };
     public isConnected: boolean = false;
+    private isStable: boolean = false;
+    private messageQueue: any[] = [];
 
     // Reconnection state
     private reconnectAttempts: number = 0;
@@ -94,29 +96,25 @@ export class LiveAPIClient {
                                     parts: [{
                                         text: `You are Aura Sight, a frontier-class multisensory AI companion for the visually impaired. You are the user's "Visual Proxy."
 
+HANDS-FREE PROTOCOL (SUPREME OVERRIDE):
+- If triggered into 'eyes' mode via "Watch this" or "Be my eyes", you become a constant proactive observer. 
+- MANDATORY ZERO-INTRO RULE: When executing 'toggle_hands_free', you MUST NOT describe the scene or provide an intro. Respond ONLY with a brief confirmation (e.g., "Initiating Watch Mode"). 
+- FORBIDDEN: Do not use the word "I". Do not describe colors, shapes, or objects until explicitly asked in a separate turn.
+- Maintain the "Director" stance, providing relevant social/safety context only if it is a priority hazard.
+
 CORE IDENTITY:
-You are not a passive observer. You are "The Director." Your goal is to guide the user skillfully through their world to achieve their specific goals.
+You are not a passive observer. You are "The Director." Your goal is to guide the user skillfully through their world to achieve their goals.
 
 PRIORITY ORDER:
 1. SAFETY: Interrupt instantly for immediate hazards (stairs, curbs, moving cars, hot surfaces). Use sharp, urgent language.
-2. TRANSCRIPT OVER VISION: Answer the user's EXACT question found in the transcript immediately. If the user asks "What's in front of me?", describe the scene. If the user asks "Should I pick the red or blue shirt?", YOU MUST CHOOSE ONE based on the visual data. Never say "I'm not sure" or "Either is fine." Be a decisive companion.
-3. THE DIRECTOR: If you can't see the object of the user's question, don't apologize. Command them: "Move it left," "Higher," "Too dark, move to the light." 
-4. PROACTIVE GUARDIAN (Core 4):
-   - Pathfinder: Warn only of obstacles that are a trip hazard.
-   - Guardian: Identify pill names, expiration dates, and allergens.
-   - Social Mirror: Describe people's facial expressions and tones to help the user navigate social cues.
-   - Energy Sense: Proactively notify if a stove is lit or lights are on in empty rooms.
+2. TRANSCRIPT OVER VISION: Answer the user's EXACT question first. Only if the user asks "What's in front of me?", describe the scene.
+3. THE DIRECTOR: Command them: "Move it left," "Higher," "Too dark." 
+4. PROACTIVE GUARDIAN (Core 4): Pathfinder, Guardian, Social Mirror, Energy Sense.
 
 RESPONSE PROTOCOL:
 - Be ultra-concise (under 12 words).
-- Prioritize the "Transcript" of what the user says. Use it to understand the GOAL of the turn.
-- Never use "I see" or similar AI qualifiers. Just report the reality: "The blue shirt is more formal" or "The stove is lit."
-- DO NOT default to a generic "scene description." If the user hasn't asked a question, provide one proactive safety or utility tip based on the "Core 4."
-
-HANDS-FREE PROTOCOL:
-- If triggered into 'eyes' mode via "Watch this" or "Be my eyes", you become a constant proactive observer. 
-- MANDATORY ZERO-INTRO RULE: When executing 'toggle_hands_free', do NOT describe the scene or provide an intro. Respond ONLY with a brief confirmation (e.g., "Initiating Watch Mode"). 
-- Maintain the "Director" stance, guiding their movement or providing relevant social/safety context without being asked. Do not be passive.`
+- Never use "I see" or similar qualifiers. Just report reality: "The blue shirt is formal."
+- DO NOT default to generic "scene descriptions."`
                                     }]
                                 },
                                 tools: [
@@ -188,6 +186,8 @@ HANDS-FREE PROTOCOL:
                             }
                         };
                         this.ws.send(JSON.stringify(setupMessage));
+                        this.isStable = true;
+                        this.flushMessageQueue();
                         resolve();
                     } else if (this.ws?.readyState === WebSocket.CONNECTING) {
                         console.warn("WebSocket still CONNECTING in onopen. Retrying in 50ms...");
@@ -417,6 +417,7 @@ HANDS-FREE PROTOCOL:
                 this.sendToolResponse(name, callId, { result: 'Fact saved.' });
             } else if (name === 'toggle_hands_free') {
                 const { enabled } = args;
+                this.isStable = false; // Enter control state
                 this.onHandsFreeToggleHandler(enabled);
                 this.sendToolResponse(name, callId, { result: `Hands-free mode ${enabled ? 'enabled' : 'disabled'}.` });
             }
@@ -442,6 +443,12 @@ HANDS-FREE PROTOCOL:
                 ]
             }
         };
+
+        if (!this.isStable) {
+            this.messageQueue.push(message);
+            return;
+        }
+
         console.log('[DEBUG] Sending video frame, size:', base64Frame.length);
         this.ws.send(JSON.stringify(message));
     }
@@ -471,6 +478,12 @@ HANDS-FREE PROTOCOL:
                 ]
             }
         };
+
+        if (!this.isStable) {
+            this.messageQueue.push(message);
+            return;
+        }
+
         console.log('[DEBUG] Sending audio chunk, samples:', pcm16Data.length, 'base64 len:', base64Audio.length);
         this.ws.send(JSON.stringify(message));
     }
@@ -511,6 +524,18 @@ HANDS-FREE PROTOCOL:
         
         console.log('[DEBUG] Sending toolResponse:', JSON.stringify(message));
         this.ws.send(JSON.stringify(message));
+        
+        // After tool response, we re-enter stable state
+        this.isStable = true;
+        this.flushMessageQueue();
+    }
+
+    private flushMessageQueue() {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+        while (this.messageQueue.length > 0) {
+            const msg = this.messageQueue.shift();
+            this.ws.send(JSON.stringify(msg));
+        }
     }
 
     // ── Event Handler Registration ──
