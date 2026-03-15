@@ -307,6 +307,16 @@ HANDS-FREE PROTOCOL:
             return;
         }
 
+        // --- TOOL CALL HANDLING (2026 Resiliency) ---
+        // Handle standalone top-level toolCall (Gemini sometimes sends this outside serverContent)
+        const topLevelToolCall = message.toolCall || message.tool_call;
+        if (topLevelToolCall && topLevelToolCall.functionCalls) {
+            for (const fc of topLevelToolCall.functionCalls) {
+                await this.executeFunctionCall(fc);
+            }
+            return;
+        }
+
         // Handle Server Content (Resilient to casing)
         const serverContent = message.serverContent || message.server_content;
         if (serverContent) {
@@ -320,55 +330,10 @@ HANDS-FREE PROTOCOL:
             const modelTurn = serverContent.modelTurn || serverContent.model_turn;
             if (modelTurn && modelTurn.parts) {
                 for (const part of modelTurn.parts) {
-                    // Handle Tool/Function Calls (Phase 5 - AI Memory Writes)
+                    // Handle Tool/Function Calls inside modelTurn
                     const functionCall = part.functionCall || part.function_call;
                     if (functionCall) {
-                        const name = functionCall.name;
-                        const args = functionCall.args;
-                        const callId = functionCall.id || "0";
-
-                        console.log(`Gemini requested tool: ${name}`, args);
-                        
-                        try {
-                            const { data: { user } } = await supabase.auth.getUser();
-                            if (!user) throw new Error("User not authenticated");
-
-                            if (name === 'add_allergy') {
-                                const { allergy } = args;
-                                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Recording allergy: ${allergy}`));
-                                await supabase.from('ai_memory').insert({ 
-                                    user_id: user.id,
-                                    content: `Allergy: ${allergy}`,
-                                    category: 'allergy'
-                                });
-                                this.sendToolResponse(name, callId, { result: 'Allergy saved.' });
-                            } else if (name === 'update_accessible_preference') {
-                                const { preference, value } = args;
-                                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Updating preference to ${value}`));
-                                await supabase.from('accessibility_preferences').upsert({
-                                    user_id: user.id,
-                                    [preference]: value,
-                                    updated_at: new Date().toISOString()
-                                });
-                                this.sendToolResponse(name, callId, { result: 'Preference updated.' });
-                            } else if (name === 'save_fact') {
-                                const { fact } = args;
-                                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Remembering that ${fact}`));
-                                await supabase.from('ai_memory').insert({ 
-                                    user_id: user.id,
-                                    content: fact,
-                                    category: 'fact'
-                                });
-                                this.sendToolResponse(name, callId, { result: 'Fact saved.' });
-                            } else if (name === 'toggle_hands_free') {
-                                const { enabled } = args;
-                                this.onHandsFreeToggleHandler(enabled);
-                                this.sendToolResponse(name, callId, { result: `Hands-free mode ${enabled ? 'enabled' : 'disabled'}.` });
-                            }
-                        } catch (err: any) {
-                            console.error(`Tool execution failed (${name}):`, err);
-                            this.sendToolResponse(name, callId, { status: "error", message: err.message });
-                        }
+                        await this.executeFunctionCall(functionCall);
                     }
 
                     if (part.text) {
@@ -404,6 +369,58 @@ HANDS-FREE PROTOCOL:
             const transcript = transcription.text || transcription.transcript;
             console.log('User transcript received:', transcript);
             this.onTranscriptionHandler(transcript);
+        }
+    }
+
+    /**
+     * Executes a tool function request from the model.
+     */
+    private async executeFunctionCall(functionCall: any) {
+        const name = functionCall.name;
+        const args = functionCall.args;
+        const callId = functionCall.id || "0";
+
+        console.log(`Gemini requested tool: ${name}`, args);
+        
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) throw new Error("User not authenticated");
+
+            if (name === 'add_allergy') {
+                const { allergy } = args;
+                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Recording allergy: ${allergy}`));
+                await supabase.from('ai_memory').insert({ 
+                    user_id: user.id,
+                    content: `Allergy: ${allergy}`,
+                    category: 'allergy'
+                });
+                this.sendToolResponse(name, callId, { result: 'Allergy saved.' });
+            } else if (name === 'update_accessible_preference') {
+                const { preference, value } = args;
+                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Updating preference to ${value}`));
+                await supabase.from('accessibility_preferences').upsert({
+                    user_id: user.id,
+                    [preference]: value,
+                    updated_at: new Date().toISOString()
+                });
+                this.sendToolResponse(name, callId, { result: 'Preference updated.' });
+            } else if (name === 'save_fact') {
+                const { fact } = args;
+                window.speechSynthesis.speak(new SpeechSynthesisUtterance(`Remembering that ${fact}`));
+                await supabase.from('ai_memory').insert({ 
+                    user_id: user.id,
+                    content: fact,
+                    category: 'fact'
+                });
+                this.sendToolResponse(name, callId, { result: 'Fact saved.' });
+            } else if (name === 'toggle_hands_free') {
+                const { enabled } = args;
+                this.onHandsFreeToggleHandler(enabled);
+                this.sendToolResponse(name, callId, { result: `Hands-free mode ${enabled ? 'enabled' : 'disabled'}.` });
+            }
+        } catch (err: any) {
+            console.error(`Tool execution failed (${name}):`, err);
+            this.sendToolResponse(name, callId, { status: "error", message: err.message });
         }
     }
 
