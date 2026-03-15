@@ -6,6 +6,7 @@ import { twMerge } from 'tailwind-merge'
 import { MediaManager } from './lib/MediaManager'
 import { AudioPlayer } from './lib/AudioPlayer'
 import { LiveAPIClient } from './lib/LiveAPIClient'
+import { MediaPipeManager, HazardEvent } from './lib/MediaPipeManager'
 import { unlockAudio, playEarcon } from './lib/Earcon'
 import { supabase } from './lib/supabase'
 
@@ -44,6 +45,7 @@ function App() {
   const listeningTimeoutRef = useRef<number | null>(null)
 
   const mediaManager = useRef<MediaManager | null>(null)
+  const mediaPipeManager = useRef<MediaPipeManager | null>(null)
   const audioPlayer = useRef<AudioPlayer | null>(null)
   const apiClient = useRef<LiveAPIClient | null>(null)
   const captureInterval = useRef<number | null>(null)
@@ -87,6 +89,7 @@ function App() {
     await unlockAudio()
 
     if (!mediaManager.current) mediaManager.current = new MediaManager()
+    if (!mediaPipeManager.current) mediaPipeManager.current = new MediaPipeManager()
     if (!audioPlayer.current) audioPlayer.current = new AudioPlayer()
     if (!apiClient.current) apiClient.current = new LiveAPIClient()
 
@@ -108,6 +111,31 @@ function App() {
     startHeartbeat()
 
     if ('vibrate' in navigator) navigator.vibrate([80, 40, 80])
+
+    // Initialize MediaPipe Safety Layer (Parallel to Cloud)
+    mediaPipeManager.current.initialize().catch(err => {
+      console.warn("MediaPipe Safety Layer failed to initialize, continuing with Cloud-only:", err);
+    });
+
+    mediaPipeManager.current.onHazard((hazard: HazardEvent) => {
+      // 1. Immediate tactile feedback for safety
+      if ('vibrate' in navigator) {
+        navigator.vibrate([200, 100, 200]); 
+      }
+      // console.log("EDGE HAZARD DETECTED:", hazard.label);
+
+      // 2. PRIVACY-AT-SOURCE: If it is a person, apply a privacy mask
+      if (hazard.label === 'person' && hazard.boundingBox && mediaManager.current) {
+        mediaManager.current.setPrivacyMasks([hazard.boundingBox]);
+      }
+
+      // 3. SPATIAL FEEDBACK: Orientation
+      if (hazard.boundingBox && audioPlayer.current) {
+        // Map normalized X (0 to 1) to Panner X (-1 to 1)
+        const spatialX = (hazard.boundingBox.x + hazard.boundingBox.w / 2) * 2 - 1;
+        audioPlayer.current.updateSpatialPosition(spatialX, 0, -1);
+      }
+    });
 
     try {
       await audioPlayer.current.resume()
@@ -212,6 +240,23 @@ function App() {
       apiClient.current!.onTranscription((transcript) => {
         if (statusRef.current === 'recording' || statusRef.current === 'listening') {
           setDirectorMessage(`"${transcript}"`);
+
+          const lowerTranscript = transcript.toLowerCase();
+          
+          // VOICE COMMANDS: Mode Switching
+          if (lowerTranscript.includes("watch this") || lowerTranscript.includes("be my eyes")) {
+            if (!isHandsFreeRef.current) {
+              setIsHandsFree(true);
+              isHandsFreeRef.current = true;
+              playEarcon('success');
+              setDirectorMessage('Initiating Watch Mode...');
+              // The AI will also respond with "Now watching" or similar based on instructions
+            }
+          }
+
+          if (lowerTranscript.includes("stop watching") || lowerTranscript.includes("go to sleep")) {
+            cancelSession();
+          }
         }
       });
 
@@ -249,6 +294,14 @@ function App() {
         const frame = mediaManager.current?.captureFrame()
         if (frame && apiClient.current) {
           apiClient.current.sendVideoFrame(frame)
+        }
+
+        // Parallel Edge Detection
+        const videoElement = mediaManager.current?.getVideoElement();
+        if (videoElement && mediaPipeManager.current) {
+          // Clear previous masks before new detection cycle to avoid sticky blurring
+          mediaManager.current?.setPrivacyMasks([]);
+          mediaPipeManager.current.detect(videoElement, performance.now());
         }
       }, 1000)
 

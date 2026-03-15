@@ -16,6 +16,7 @@ export class MediaManager {
     private videoElement: HTMLVideoElement | null = null;
     private canvas: HTMLCanvasElement | null = null;
     private ctx: CanvasRenderingContext2D | null = null;
+    private activeMasks: { x: number, y: number, w: number, h: number }[] = [];
 
     constructor() {
         // Create a hidden video element and canvas once to avoid overhead
@@ -112,11 +113,44 @@ export class MediaManager {
         // Draw the current video frame onto the 512x512 canvas
         this.ctx.drawImage(this.videoElement, 0, 0, this.canvas.width, this.canvas.height);
         
+        // Apply Privacy Masking at source
+        this.applyMasks();
+        
         // Return base64 JPEG at 0.6 quality (sweet spot for Gemini)
         return this.canvas.toDataURL('image/jpeg', 0.6).split(',')[1];
     }
 
-    async startAudioCapture(onAudioData: (data: Int16Array) => void) {
+    /**
+     * Updates the active privacy masks.
+     * @param masks - Array of rectangles to blur on the next capture.
+     */
+    setPrivacyMasks(masks: { x: number, y: number, w: number, h: number }[]) {
+        this.activeMasks = masks;
+    }
+
+    private applyMasks() {
+        if (!this.ctx || this.activeMasks.length === 0) return;
+
+        this.ctx.save();
+        for (const mask of this.activeMasks) {
+            // Enterprise standard: High-quality Gaussian-like blur for privacy
+            // For Canvas, we use a simpler box blur or fill to save perf on-device
+            this.ctx.filter = 'blur(15px)';
+            this.ctx.drawImage(
+                this.canvas!, 
+                mask.x * this.canvas!.width, 
+                mask.y * this.canvas!.height, 
+                mask.w * this.canvas!.width, 
+                mask.h * this.canvas!.height,
+                mask.x * this.canvas!.width, 
+                mask.y * this.canvas!.height, 
+                mask.w * this.canvas!.width, 
+                mask.h * this.canvas!.height
+            );
+            this.ctx.filter = 'none';
+        }
+        this.ctx.restore();
+    }
         this.onAudioData = onAudioData;
         if (!this.stream) return;
 
