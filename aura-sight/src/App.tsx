@@ -127,11 +127,21 @@ function App() {
         audioPlayer.current?.resume()
       })
 
-      apiClient.current!.onTurnComplete(() => {
+      apiClient.current!.onTurnComplete(async () => {
         if (isHandsFreeRef.current) {
           updateStatus('recording');
           setDirectorMessage('Watching...');
           startHeartbeat();
+          
+          // RESTART AUDIO CAPTURE FOR VAD
+          try {
+            await mediaManager.current?.startAudioCapture((pcm16) => {
+              apiClient.current?.sendAudioChunk(pcm16);
+            });
+          } catch (err) {
+            console.error("Failed to restart audio capture in hands-free mode:", err);
+          }
+
           // Ensure capture interval is running
           if (!captureInterval.current) {
             captureInterval.current = window.setInterval(() => {
