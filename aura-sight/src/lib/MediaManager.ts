@@ -155,9 +155,22 @@ export class MediaManager {
         this.onAudioData = onAudioData;
         if (!this.stream) return;
 
-        this.audioContext = new AudioContext({ sampleRate: 16000 });
-        // Use the absolute path for the worklet consistent with the project structure
-        await this.audioContext.audioWorklet.addModule('/pcm-processor.worklet.js');
+        // 2026 Resilience: Reuse AudioContext to prevent browser suspension / hardware lock
+        if (!this.audioContext || this.audioContext.state === 'closed') {
+            this.audioContext = new AudioContext({ sampleRate: 16000 });
+            // Use the absolute path for the worklet consistent with the project structure
+            await this.audioContext.audioWorklet.addModule('/pcm-processor.worklet.js');
+        }
+
+        if (this.audioContext.state === 'suspended') {
+            await this.audioContext.resume();
+        }
+
+        // Clean up previous processor if it exists
+        if (this.processor) {
+            this.processor.disconnect();
+            this.processor = null;
+        }
 
         const source = this.audioContext.createMediaStreamSource(this.stream);
         this.processor = new AudioWorkletNode(this.audioContext, 'pcm-processor');

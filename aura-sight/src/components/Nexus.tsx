@@ -137,6 +137,7 @@ export const Nexus: React.FC<NexusProps> = ({
             case 'thinking': return 'Processing...';
             case 'watching': return 'Watching...';
             case 'responding': return directorMessage || 'Speaking...';
+            case 'reconnecting': return directorMessage || 'Connection lost...';
             case 'error': return directorMessage || 'Error';
             default: return null;
         }
@@ -203,7 +204,7 @@ export const Nexus: React.FC<NexusProps> = ({
                     } : undefined}
                 >
                     {/* Live Camera Feed (Masked by rounded-full on parent) */}
-                    {(status === 'recording' || status === 'responding' || status === 'watching' || isHandsFree) && videoStream && cameraEnabled && (
+                    {(status === 'recording' || status === 'responding' || status === 'watching' || status === 'reconnecting' || isHandsFree) && videoStream && cameraEnabled && (
                         <div className={cn(
                             "absolute inset-0 w-full h-full transition-all duration-700",
                             (status === 'watching' || isHandsFree && status === 'idle') ? "opacity-100 scale-100" : "opacity-60"
@@ -225,7 +226,7 @@ export const Nexus: React.FC<NexusProps> = ({
                             )}
                             
                             {/* RED DOT: Active Listening Indicator (New 2026 Standard) */}
-                            {(status === 'recording' || status === 'listening' || status === 'watching') && (
+                            {(status === 'recording' || status === 'listening' || status === 'watching' || status === 'reconnecting') && (
                                 <div className="absolute top-4 right-4 flex items-center gap-2 bg-black/40 backdrop-blur-sm px-2 py-1 rounded-full border border-white/10 z-50">
                                     <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]" />
                                     <span className="text-[8px] font-bold text-white uppercase tracking-tighter">LIVE</span>

@@ -271,16 +271,18 @@ function App() {
       });
 
       apiClient.current!.onDisconnect(() => {
-        // Only show error if we were actually in an active session
-        // If we're idle, the connection might close due to timeout, which is fine
-        if (statusRef.current !== 'idle' && statusRef.current !== 'error') {
-          updateStatus('error')
-          playEarcon('error')
-          setDirectorMessage('Connection lost')
+        // 2026 Persistence Logic: Only kill media if we are in a terminal state or idle
+        // If the socket is reconnecting, we MUST keep the stream alive for resumption.
+        if (statusRef.current !== 'idle' && statusRef.current !== 'error' && statusRef.current !== 'reconnecting') {
+           updateStatus('error');
+           playEarcon('error');
+           setDirectorMessage('Connection lost');
+           
+           // Terminal stop
+           mediaManager.current?.stop();
+           setVideoStream(null);
+           stopHeartbeat();
         }
-        stopHeartbeat()
-        mediaManager.current?.stop()
-        setVideoStream(null)
       })
 
       apiClient.current!.onReconnecting((attempt) => {
@@ -292,6 +294,22 @@ function App() {
         if (isHandsFreeRef.current) {
           updateStatus('watching');
           setDirectorMessage('Watching...');
+          
+          // 2026 Resumption: Ensure capture loops are active
+          if (mediaManager.current?.getStream()) {
+             mediaManager.current.startAudioCapture((pcm16) => {
+               apiClient.current?.sendAudioChunk(pcm16);
+             });
+             
+             if (!captureInterval.current) {
+                captureInterval.current = window.setInterval(() => {
+                  const frame = mediaManager.current?.captureFrame();
+                  if (frame && apiClient.current) {
+                    apiClient.current.sendVideoFrame(frame);
+                  }
+                }, 1000);
+             }
+          }
         } else {
           updateStatus('idle');
           setDirectorMessage(null);
