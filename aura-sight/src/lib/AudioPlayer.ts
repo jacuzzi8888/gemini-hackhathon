@@ -14,8 +14,15 @@ export class AudioPlayer {
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
             sampleRate: AudioPlayer.SAMPLE_RATE
         });
+        this.initPanner();
+    }
 
-        // Initialize Panner for Spatial Audio (HRTF 2026 Standard)
+    /**
+     * Initializes or re-initializes the PannerNode for the current AudioContext.
+     */
+    private initPanner() {
+        if (!this.audioContext) return;
+        
         this.panner = this.audioContext.createPanner();
         this.panner.panningModel = 'HRTF';
         this.panner.distanceModel = 'inverse';
@@ -104,6 +111,7 @@ export class AudioPlayer {
         this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
             sampleRate: AudioPlayer.SAMPLE_RATE
         });
+        this.initPanner();
         this.nextStartTime = 0;
     }
 

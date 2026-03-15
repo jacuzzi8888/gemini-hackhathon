@@ -103,7 +103,15 @@ export const Nexus: React.FC<NexusProps> = ({
     useEffect(() => {
         const bindStream = () => {
             if (videoRef.current && videoStream) {
-                videoRef.current.srcObject = videoStream;
+                // Only set if different to avoid flickering, but ensure it's playing
+                if (videoRef.current.srcObject !== videoStream) {
+                    videoRef.current.srcObject = videoStream;
+                }
+                
+                // Force play if paused (happens during state changes)
+                if (videoRef.current.paused) {
+                    videoRef.current.play().catch(e => console.warn("Auto-play failed:", e));
+                }
             } else if (videoRef.current) {
                 videoRef.current.srcObject = null;
             }
@@ -112,7 +120,11 @@ export const Nexus: React.FC<NexusProps> = ({
         
         // Robust re-bind for state changes (e.g., responding -> watching)
         const timer = setTimeout(bindStream, 150);
-        return () => clearTimeout(timer);
+        const secondTimer = setTimeout(bindStream, 500); // Guard for slow renders
+        return () => {
+            clearTimeout(timer);
+            clearTimeout(secondTimer);
+        };
     }, [videoStream, status]);
 
     // ── Status Text ──
